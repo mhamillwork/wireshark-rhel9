@@ -25,6 +25,8 @@ Push this repository to the isolated GitLab. The job uses the image already load
 
 `./build/run/tshark` is saved as a job artifact. The build is also installed to `/usr/local`, which gives `/sandbox` plugins `WiresharkConfig.cmake` and the libraries they link.
 
+The host needs Docker Compose v2 (`docker compose`).
+
 ## Compose session and plugins
 
 `~/sandbox` is mounted at `/sandbox` in the compile container. Put each dissector plugin in its own subdirectory with a `CMakeLists.txt` (see `wireshark/doc/plugins.example`).
