@@ -1,0 +1,17 @@
+# Manual compile session. The image is loaded locally (docker load / docker build);
+# Compose does not pull it from a registry.
+services:
+  wireshark-compile:
+    image: ${WIRESHARK_IMAGE:-wireshark-ubi9:dev}
+    pull_policy: ${WIRESHARK_PULL_POLICY:-if_not_present}
+    stdin_open: true
+    tty: true
+    working_dir: /src
+    command: sleep infinity
+    volumes:
+      - .:/workspace:ro
+      - ${SANDBOX_DIR:-${HOME}/sandbox}:/sandbox
+      - compile-src:/src
+
+volumes:
+  compile-src:

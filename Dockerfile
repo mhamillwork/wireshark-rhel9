@@ -4,10 +4,9 @@
 # packages need X11, libinput, and GL libraries that UBI does not provide, so
 # this image builds the Wireshark CLI tools rather than the Qt application.
 #
-#   docker build -t wireshark-ubi9 .
-#   docker run --rm -it -v "$PWD":/src -w /src wireshark-ubi9 \
-#     bash -lc 'cmake -S . -B /tmp/build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBUILD_wireshark=OFF && cmake --build /tmp/build'
-#   # binary: /tmp/build/run/tshark inside that container
+#   docker build -t wireshark-ubi9:dev .
+# Wireshark 4.6.9 sources live in wireshark/ and are compiled with
+# scripts/compile-wireshark.sh (see README.md). The Qt GUI is not built.
 
 FROM registry.access.redhat.com/ubi9/ubi:9.8
 
