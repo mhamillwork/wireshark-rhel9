@@ -1,0 +1,23 @@
+# Isolated GitLab: load wireshark-ubi9:dev on the runner (docker load) before
+# this job. GitLab checks out this repository, which already contains the
+# Wireshark 4.6.9 sources under wireshark/, then the job compiles them.
+
+stages:
+  - compile
+
+variables:
+  WIRESHARK_IMAGE: wireshark-ubi9:dev
+
+compile-wireshark:
+  stage: compile
+  image:
+    name: $WIRESHARK_IMAGE
+    pull_policy: if-not-present
+    entrypoint: [""]
+  script:
+    - ./scripts/compile-wireshark.sh
+    - ./build/run/tshark -n -r wireshark/test/captures/dhcp.pcap
+  artifacts:
+    paths:
+      - build/run/
+    expire_in: 7 days
