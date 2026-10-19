@@ -4,9 +4,20 @@ Wireshark 4.6.9, the current stable release, and a Red Hat UBI 9 image that can 
 
 The image builds the command-line tools (`tshark`, `dumpcap`, `editcap`, `sharkd`). UBI 9 does not include the X11 and GL libraries the Qt 6 GUI needs, so the compile sets `-DBUILD_wireshark=OFF`.
 
-## Image
+## Base image
 
-On a machine with network access:
+`images/ubi9-ubi-9.8.tar.gz` is `docker save` of `registry.access.redhat.com/ubi9/ubi:9.8` (`sha256:16e9e43d99e181463513cc84a514859b1abb9460f1c4d9e208da4b4e51cd5cc3`), the image named by the Dockerfile `FROM` line. Load it before `docker build` so the build uses that copy and does not contact the registry:
+
+```bash
+./scripts/load-ubi-image.sh
+docker build -t wireshark-ubi9:dev .
+```
+
+The load script checks the archive checksum and the image id after `docker load`.
+
+## Compile image
+
+On a machine with network access, after the base image is loaded:
 
 ```bash
 docker build -t wireshark-ubi9:dev .

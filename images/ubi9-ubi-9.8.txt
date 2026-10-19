@@ -1,0 +1,4 @@
+tag: registry.access.redhat.com/ubi9/ubi:9.8
+image: sha256:16e9e43d99e181463513cc84a514859b1abb9460f1c4d9e208da4b4e51cd5cc3
+archive: sha256:40eff05d9d8824c8f01ca429859f77ebd1017e98ad8538fa9432a3fc2230e571
+created: 2026-10-13T10:53:46Z

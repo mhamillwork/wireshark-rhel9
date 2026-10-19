@@ -4,7 +4,12 @@
 # packages need X11, libinput, and GL libraries that UBI does not provide, so
 # this image builds the Wireshark CLI tools rather than the Qt application.
 #
+# On an isolated network, load the vendored base image first so this FROM
+# line does not pull from the registry:
+#
+#   ./scripts/load-ubi-image.sh
 #   docker build -t wireshark-ubi9:dev .
+#
 # Wireshark 4.6.9 sources live in wireshark/ and are compiled with
 # scripts/compile-wireshark.sh (see README.md). The Qt GUI is not built.
 
