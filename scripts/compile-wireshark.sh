@@ -56,11 +56,29 @@ cmake -S "$SRC_DIR" -B "$BUILD_DIR" -G Ninja \
   -DUSE_qt6=OFF
 
 cmake --build "$BUILD_DIR" --parallel "$JOBS"
+
+# Executables are linked with the install RPATH, $ORIGIN/../lib64.
+# libwireshark.so.19 and the other libraries are built in run/.
+libdir=lib64
+if [ -f "$BUILD_DIR/CMakeCache.txt" ]; then
+  cached="$(sed -n 's/^CMAKE_INSTALL_LIBDIR:[^=]*=//p' "$BUILD_DIR/CMakeCache.txt" | head -1)"
+  if [ -n "$cached" ]; then
+    libdir="$cached"
+  fi
+fi
+mkdir -p "$BUILD_DIR/$libdir"
+shopt -s nullglob
+for so in "$BUILD_DIR/run"/lib*.so*; do
+  ln -sfn "../run/$(basename "$so")" "$BUILD_DIR/$libdir/$(basename "$so")"
+done
+shopt -u nullglob
+
 cmake --install "$BUILD_DIR"
 cmake --install "$BUILD_DIR" --component Development
 
 echo "tshark: $BUILD_DIR/run/tshark"
 echo "wireshark: $BUILD_DIR/run/wireshark"
 echo "installed: $INSTALL_PREFIX (libraries and WiresharkConfig.cmake for /src/plugins)"
+export LD_LIBRARY_PATH="$BUILD_DIR/run${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 "$BUILD_DIR/run/tshark" -v
 QT_QPA_PLATFORM=offscreen "$BUILD_DIR/run/wireshark" --version
