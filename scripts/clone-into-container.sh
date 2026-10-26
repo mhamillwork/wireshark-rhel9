@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
-# Start the compile container and clone this project into it.
-#
-# Offline (default): clone the checkout mounted at /workspace.
-# Connected GitLab: set WIRESHARK_GIT_URL (and optional WIRESHARK_GIT_REF).
+# Start the compile container. Compose mounts the workstation checkout at /src:
+#   ${HOME}/sandbox/wireshark-packet-penguin/src
 #
 #   ./scripts/clone-into-container.sh
 #   ./scripts/clone-into-container.sh --compile
@@ -40,37 +38,17 @@ fi
 
 docker_cmd compose up -d
 
-export WIRESHARK_GIT_URL="${WIRESHARK_GIT_URL:-}"
-export WIRESHARK_GIT_REF="${WIRESHARK_GIT_REF:-}"
-
-docker_cmd compose exec -T \
-  -e WIRESHARK_GIT_URL \
-  -e WIRESHARK_GIT_REF \
-  wireshark-compile \
-  bash -lc '
-    set -euo pipefail
-    git config --global --add safe.directory /workspace
-    rm -rf /src/project
-    if [ -n "${WIRESHARK_GIT_URL:-}" ]; then
-      if [ -n "${WIRESHARK_GIT_REF:-}" ]; then
-        git clone --depth 1 --branch "$WIRESHARK_GIT_REF" "$WIRESHARK_GIT_URL" /src/project
-      else
-        git clone --depth 1 "$WIRESHARK_GIT_URL" /src/project
-      fi
-    else
-      git clone --no-local /workspace /src/project
-    fi
-    if [ -f /src/project/src/wireshark-4.6.9/CMakeLists.txt ]; then
-      echo "Wireshark sources: /src/project/src/wireshark-4.6.9"
-    elif [ -f /src/project/wireshark/CMakeLists.txt ]; then
-      echo "Wireshark sources: /src/project/wireshark"
-    else
-      echo "Wireshark sources not found under /src/project" >&2
-      exit 1
-    fi
-    echo "Dissector plugins: /src/plugins"
-  '
+docker_cmd compose exec -T wireshark-compile bash -lc '
+  set -euo pipefail
+  if [ ! -f /src/wireshark-4.6.9/CMakeLists.txt ]; then
+    echo "Wireshark sources not found at /src/wireshark-4.6.9" >&2
+    echo "Compose mounts ~/sandbox/wireshark-packet-penguin/src on /src." >&2
+    exit 1
+  fi
+  echo "Wireshark sources: /src/wireshark-4.6.9"
+  echo "Dissector plugins: /src/plugins"
+'
 
 if [ "$COMPILE" -eq 1 ]; then
-  docker_cmd compose exec -T -w /src/project wireshark-compile ./scripts/compile-wireshark.sh
+  docker_cmd compose exec -T wireshark-compile /src/scripts/compile-wireshark.sh
 fi

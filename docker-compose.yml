@@ -1,5 +1,9 @@
 # Manual compile session. The image is loaded locally (docker load / docker build);
 # Compose does not pull it from a registry.
+#
+# The workstation GitLab checkout is mounted at /src, so
+# /src/scripts/compile-wireshark.sh compiles that tree and writes /src/build
+# back to ${HOME}/sandbox/wireshark-packet-penguin/src.
 services:
   wireshark-compile:
     image: ${WIRESHARK_IMAGE:-wireshark-ubi9:dev}
@@ -9,9 +13,6 @@ services:
     working_dir: /src
     command: sleep infinity
     volumes:
-      - .:/workspace:ro
+      - ${HOME}/sandbox/wireshark-packet-penguin:/workspace:ro
+      - ${HOME}/sandbox/wireshark-packet-penguin/src:/src
       - ${SANDBOX_DIR:-${HOME}/sandbox}:/sandbox
-      - compile-src:/src
-
-volumes:
-  compile-src:
