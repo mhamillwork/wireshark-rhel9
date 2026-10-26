@@ -4,7 +4,24 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-SRC_DIR="${SRC_DIR:-$ROOT/wireshark}"
+# Prefer the tree copied from src/ in the GitLab repo. Fall back to a
+# checkout that still keeps the sources at wireshark/.
+if [ -z "${SRC_DIR:-}" ]; then
+  SRC_DIR=""
+  for candidate in \
+    "$ROOT/src/wireshark-4.6.9" \
+    "/src/wireshark-4.6.9" \
+    "$ROOT/wireshark"
+  do
+    if [ -f "$candidate/CMakeLists.txt" ]; then
+      SRC_DIR="$candidate"
+      break
+    fi
+  done
+  if [ -z "$SRC_DIR" ]; then
+    SRC_DIR="/src/wireshark-4.6.9"
+  fi
+fi
 BUILD_DIR="${BUILD_DIR:-$ROOT/build}"
 INSTALL_PREFIX="${INSTALL_PREFIX:-/usr/local}"
 BUILD_TYPE="${CMAKE_BUILD_TYPE:-RelWithDebInfo}"
@@ -38,6 +55,6 @@ cmake --install "$BUILD_DIR" --component Development
 
 echo "tshark: $BUILD_DIR/run/tshark"
 echo "wireshark: $BUILD_DIR/run/wireshark"
-echo "installed: $INSTALL_PREFIX (libraries and WiresharkConfig.cmake for /sandbox plugins)"
+echo "installed: $INSTALL_PREFIX (libraries and WiresharkConfig.cmake for /src/plugins)"
 "$BUILD_DIR/run/tshark" -v
 QT_QPA_PLATFORM=offscreen "$BUILD_DIR/run/wireshark" --version

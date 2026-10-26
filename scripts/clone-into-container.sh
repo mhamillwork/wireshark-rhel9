@@ -60,9 +60,15 @@ docker_cmd compose exec -T \
     else
       git clone --no-local /workspace /src/project
     fi
-    test -f /src/project/wireshark/CMakeLists.txt
-    echo "Wireshark sources: /src/project/wireshark"
-    echo "Dissector plugins: /sandbox"
+    if [ -f /src/project/src/wireshark-4.6.9/CMakeLists.txt ]; then
+      echo "Wireshark sources: /src/project/src/wireshark-4.6.9"
+    elif [ -f /src/project/wireshark/CMakeLists.txt ]; then
+      echo "Wireshark sources: /src/project/wireshark"
+    else
+      echo "Wireshark sources not found under /src/project" >&2
+      exit 1
+    fi
+    echo "Dissector plugins: /src/plugins"
   '
 
 if [ "$COMPILE" -eq 1 ]; then

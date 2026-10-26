@@ -15,7 +15,8 @@
 #   ./scripts/load-ubi-image.sh
 #   podman build -t wireshark-ubi9:dev .
 #
-# Wireshark 4.6.9 sources live in wireshark/ and are compiled with
+# The build context's src/ directory is copied to /src. That provides
+# /src/wireshark-4.6.9 and /src/plugins. Compile with
 # scripts/compile-wireshark.sh (see README.md).
 
 FROM registry.access.redhat.com/ubi9/ubi:9.8
@@ -92,6 +93,9 @@ RUN printf 'assumeyes=1\nmax_parallel_downloads=10\ntsflags=nodocs\ninstall_weak
         dnf clean all; \
         rm -rf /var/cache/dnf' \
     && ln -s /run/secrets/rhsm /etc/rhsm-host
+
+# src/wireshark-4.6.9 and src/plugins from the GitLab checkout.
+COPY src/ /src/
 
 WORKDIR /src
 CMD ["bash"]

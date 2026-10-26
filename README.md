@@ -1,6 +1,6 @@
 # wireshark-rhel9
 
-Wireshark 4.6.9, the current stable release, and a Red Hat UBI 9 image that can compile it. The Wireshark sources are in `wireshark/` so this repository can be copied to a network that cannot reach the internet.
+Wireshark 4.6.9, the current stable release, and a Red Hat UBI 9 image that can compile it. Put the Wireshark sources at `src/wireshark-4.6.9` and dissector plugins at `src/plugins`. The image build copies `src/` to `/src`.
 
 The image installs its RPMs from UBI 9.8 and from the RHEL 9 repositories on Satellite. UBI supplies the compiler and many protocol libraries. BaseOS, AppStream, and CodeReady Builder supply the rest, including flex, c-ares, speexdsp, and the Qt 5.15 GUI. RHEL 9 does not ship Qt 6. It also does not ship `libsmi-devel`, `nghttp3`, spandsp, iLBC, bcg729, or opencore-amr, so those features stay off.
 
@@ -37,9 +37,9 @@ To show the GUI on a host display, pass `DISPLAY` when you start the container a
 
 ## GitLab CI
 
-Push this repository to the isolated GitLab. The job uses the image already loaded on the runner, checks out this project, and compiles `wireshark/`. Override the image name with CI variable `WIRESHARK_IMAGE` if the loaded tag is different.
+Push this repository to the isolated GitLab. The job uses the image already loaded on the runner, checks out this project, and compiles `src/wireshark-4.6.9`. Override the image name with CI variable `WIRESHARK_IMAGE` if the loaded tag is different.
 
-`./build/run/tshark` is saved as a job artifact. The build is also installed to `/usr/local`, which gives `/sandbox` plugins `WiresharkConfig.cmake` and the libraries they link.
+`./build/run/tshark` is saved as a job artifact. The build is also installed to `/usr/local`, which gives `/src/plugins` `WiresharkConfig.cmake` and the libraries they link.
 
 The host needs Docker Compose v2 (`docker compose`).
 
@@ -67,7 +67,7 @@ docker compose exec -w /src/project wireshark-compile ./scripts/compile-wireshar
 
 `./scripts/clone-into-container.sh --compile` clones and compiles in one step.
 
-After the headers are installed, build plugins from `/sandbox`:
+After the headers are installed, build plugins from `/src/plugins`:
 
 ```bash
 docker compose exec wireshark-compile ./scripts/build-sandbox-plugins.sh
