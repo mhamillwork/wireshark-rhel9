@@ -1,10 +1,17 @@
 #!/usr/bin/env bash
-# Build out-of-tree dissector plugins mounted at /sandbox.
+# Build out-of-tree dissector plugins from /src/plugins.
 # Each immediate subdirectory with a CMakeLists.txt is configured against
 # the Wireshark headers installed by scripts/compile-wireshark.sh.
+# SANDBOX overrides the directory. /sandbox remains the fallback.
 set -euo pipefail
 
-SANDBOX="${SANDBOX:-/sandbox}"
+if [ -z "${SANDBOX:-}" ]; then
+  if [ -d /src/plugins ]; then
+    SANDBOX=/src/plugins
+  else
+    SANDBOX=/sandbox
+  fi
+fi
 PREFIX="${CMAKE_PREFIX_PATH:-${INSTALL_PREFIX:-/usr/local}}"
 JOBS="${JOBS:-$(nproc)}"
 
