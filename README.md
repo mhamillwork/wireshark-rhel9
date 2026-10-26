@@ -67,15 +67,25 @@ Each immediate subdirectory with a `CMakeLists.txt` is built on its own. The exa
 
 ## Compose
 
-`docker-compose.yml` mounts the workstation checkout `${HOME}/sandbox/wireshark-packet-penguin/src` at `/src`. The parent checkout is read-only at `/workspace`. The build writes `/src/build` back into that `src` directory. The service uses host networking and the workstation X11 display.
+`docker-compose.yml` leaves `/src/scripts` in the image. The checkout is not mounted on `/src`. Wireshark sources and plugins are mounted read-only from `${HOME}/sandbox/wireshark-packet-penguin/src`, and `${HOME}/sandbox` is read-only at `/sandbox`. The only writable checkout path is `src/build`, mounted at `/src/build`. The parent checkout is read-only at `/workspace`. The service uses host networking and the workstation X11 display.
 
-Run Compose from the graphical session so `DISPLAY` is set. The X11 cookie is `${XAUTHORITY}`, or `~/.Xauthority` when that variable is unset.
+Run Compose from the graphical session so `DISPLAY` is set. The X11 cookie is `${XAUTHORITY}`, or `~/.Xauthority` when that variable is unset. These paths have to exist already. Compose is set to refuse to create the checkout, the source tree, the plugins directory, `~/sandbox`, or the X authority file.
 
 ```bash
-docker compose up -d
+docker compose up -d --force-recreate
 docker compose exec wireshark-compile /src/scripts/compile-wireshark.sh
 docker compose exec wireshark-compile /src/build/run/wireshark
 ```
+
+If `src/scripts` is missing from the checkout, copy it back out of the image:
+
+```bash
+mkdir -p "${HOME}/sandbox/wireshark-packet-penguin/src/scripts"
+docker run --rm --entrypoint tar wireshark-ubi9:dev -C /src/scripts -cf - . \
+  | tar -C "${HOME}/sandbox/wireshark-packet-penguin/src/scripts" -xf -
+```
+
+A committed copy can also be restored with `git restore` in that checkout. Files edited after the image was built are in git, not in the image.
 
 If the window is refused, allow the container's root user on the local display:
 

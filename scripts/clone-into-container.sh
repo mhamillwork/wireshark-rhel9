@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Start the compile container. Compose mounts the workstation checkout at /src:
-#   ${HOME}/sandbox/wireshark-packet-penguin/src
+# Start the compile container. Compose mounts the checkout read-only and
+# leaves /src/scripts in the image. Only src/build is writable.
 #
 #   ./scripts/clone-into-container.sh
 #   ./scripts/clone-into-container.sh --compile
@@ -15,10 +15,30 @@ if [ "${1:-}" = "--compile" ]; then
 fi
 
 IMAGE="${WIRESHARK_IMAGE:-wireshark-ubi9:dev}"
+PROJECT="${HOME}/sandbox/wireshark-packet-penguin"
 SANDBOX="${SANDBOX_DIR:-$HOME/sandbox}"
-mkdir -p "$SANDBOX"
 export SANDBOX_DIR="$SANDBOX"
 export WIRESHARK_IMAGE="$IMAGE"
+
+missing=0
+for dir in "$PROJECT" "$PROJECT/src/wireshark-4.6.9" "$PROJECT/src/plugins" "$SANDBOX"; do
+  if [ ! -d "$dir" ]; then
+    echo "Missing directory: $dir" >&2
+    missing=1
+  fi
+done
+if [ "$missing" -ne 0 ]; then
+  echo "Compose does not create the checkout or ~/sandbox." >&2
+  exit 1
+fi
+if [ ! -f "$PROJECT/src/scripts/compile-wireshark.sh" ]; then
+  echo "Checkout has no src/scripts/compile-wireshark.sh." >&2
+  echo "The container uses the copy in the image at /src/scripts." >&2
+  echo "Copy that version back with:" >&2
+  echo "  mkdir -p \"$PROJECT/src/scripts\"" >&2
+  echo "  docker run --rm --entrypoint tar $IMAGE -C /src/scripts -cf - . | tar -C \"$PROJECT/src/scripts\" -xf -" >&2
+fi
+mkdir -p "$PROJECT/src/build"
 
 if docker info >/dev/null 2>&1; then
   docker_cmd() { docker "$@"; }
@@ -42,10 +62,14 @@ docker_cmd compose exec -T wireshark-compile bash -lc '
   set -euo pipefail
   if [ ! -f /src/wireshark-4.6.9/CMakeLists.txt ]; then
     echo "Wireshark sources not found at /src/wireshark-4.6.9" >&2
-    echo "Compose mounts ~/sandbox/wireshark-packet-penguin/src on /src." >&2
+    exit 1
+  fi
+  if [ ! -f /src/scripts/compile-wireshark.sh ]; then
+    echo "Compile script not found at /src/scripts/compile-wireshark.sh" >&2
     exit 1
   fi
   echo "Wireshark sources: /src/wireshark-4.6.9"
+  echo "Compile script: /src/scripts/compile-wireshark.sh"
   echo "Dissector plugins: /src/plugins"
 '
 

@@ -1,9 +1,10 @@
 # Manual compile session. The image is loaded locally (docker load / docker build);
 # Compose does not pull it from a registry.
 #
-# The workstation GitLab checkout is mounted at /src, so
-# /src/scripts/compile-wireshark.sh compiles that tree and writes /src/build
-# back to ${HOME}/sandbox/wireshark-packet-penguin/src.
+# /src/scripts stays in the image. Do not mount the checkout on /src: that
+# covers the scripts, and a writable mount lets the container remove them
+# from the workstation. Sources and plugins are read-only. Only src/build
+# is writable, so the compile output is written back to the checkout.
 #
 # Host networking lets Wireshark see the workstation interfaces. The X11
 # socket and DISPLAY let /src/build/run/wireshark open on the workstation
@@ -22,8 +23,39 @@ services:
       QT_X11_NO_MITSHM: "1"
       XAUTHORITY: /tmp/.Xauthority
     volumes:
-      - ${HOME}/sandbox/wireshark-packet-penguin:/workspace:ro
-      - ${HOME}/sandbox/wireshark-packet-penguin/src:/src
-      - ${SANDBOX_DIR:-${HOME}/sandbox}:/sandbox
-      - /tmp/.X11-unix:/tmp/.X11-unix
-      - ${XAUTHORITY:-${HOME}/.Xauthority}:/tmp/.Xauthority:ro
+      - type: bind
+        source: ${HOME}/sandbox/wireshark-packet-penguin
+        target: /workspace
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${HOME}/sandbox/wireshark-packet-penguin/src/wireshark-4.6.9
+        target: /src/wireshark-4.6.9
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${HOME}/sandbox/wireshark-packet-penguin/src/plugins
+        target: /src/plugins
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${HOME}/sandbox/wireshark-packet-penguin/src/build
+        target: /src/build
+      - type: bind
+        source: ${SANDBOX_DIR:-${HOME}/sandbox}
+        target: /sandbox
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /tmp/.X11-unix
+        target: /tmp/.X11-unix
+      - type: bind
+        source: ${XAUTHORITY:-${HOME}/.Xauthority}
+        target: /tmp/.Xauthority
+        read_only: true
+        bind:
+          create_host_path: false
