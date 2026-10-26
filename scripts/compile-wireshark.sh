@@ -26,9 +26,11 @@ fi
 
 mkdir -p "$BUILD_DIR"
 
+# RHEL 9 ships Qt 5.15, not Qt 6. Wireshark defaults to Qt 6.
 cmake -S "$SRC_DIR" -B "$BUILD_DIR" -G Ninja \
   -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
-  -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX"
+  -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX" \
+  -DUSE_qt6=OFF
 
 cmake --build "$BUILD_DIR" --parallel "$JOBS"
 cmake --install "$BUILD_DIR"

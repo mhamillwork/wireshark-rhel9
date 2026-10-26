@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Load the vendored UBI 9.8 base image used by the Dockerfile.
 #
-# The archive is docker save of registry.access.redhat.com/ubi9/ubi:9.8.
-# After this script, docker build resolves that FROM line locally.
+# The archive is a docker/podman save of registry.access.redhat.com/ubi9/ubi:9.8.
+# Podman is preferred so a following "podman build" sees this image and the
+# host Satellite entitlement. Docker is used when Podman is not available.
 #
 #   ./scripts/load-ubi-image.sh
 set -euo pipefail
@@ -26,15 +27,19 @@ if [ "$actual" != "$EXPECTED_ARCHIVE_SHA256" ]; then
   exit 1
 fi
 
-if docker info >/dev/null 2>&1; then
-  docker_cmd() { docker "$@"; }
+if podman info >/dev/null 2>&1; then
+  container_cmd() { podman "$@"; }
+elif docker info >/dev/null 2>&1; then
+  container_cmd() { docker "$@"; }
+elif sudo podman info >/dev/null 2>&1; then
+  container_cmd() { sudo podman "$@"; }
 else
-  docker_cmd() { sudo docker "$@"; }
+  container_cmd() { sudo docker "$@"; }
 fi
 
-docker_cmd load -i "$ARCHIVE"
+container_cmd load -i "$ARCHIVE"
 
-image_id="$(docker_cmd image inspect "$TAG" --format '{{.Id}}')"
+image_id="$(container_cmd image inspect "$TAG" --format '{{.Id}}')"
 if [ "$image_id" != "$EXPECTED_IMAGE_ID" ]; then
   echo "Loaded $TAG is $image_id, expected $EXPECTED_IMAGE_ID" >&2
   exit 1
