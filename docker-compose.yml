@@ -4,15 +4,26 @@
 # The workstation GitLab checkout is mounted at /src, so
 # /src/scripts/compile-wireshark.sh compiles that tree and writes /src/build
 # back to ${HOME}/sandbox/wireshark-packet-penguin/src.
+#
+# Host networking lets Wireshark see the workstation interfaces. The X11
+# socket and DISPLAY let /src/build/run/wireshark open on the workstation
+# display. Run Compose from that graphical session so DISPLAY is set.
 services:
   wireshark-compile:
     image: ${WIRESHARK_IMAGE:-wireshark-ubi9:dev}
     pull_policy: ${WIRESHARK_PULL_POLICY:-if_not_present}
+    network_mode: host
     stdin_open: true
     tty: true
     working_dir: /src
     command: sleep infinity
+    environment:
+      DISPLAY: ${DISPLAY}
+      QT_X11_NO_MITSHM: "1"
+      XAUTHORITY: /tmp/.Xauthority
     volumes:
       - ${HOME}/sandbox/wireshark-packet-penguin:/workspace:ro
       - ${HOME}/sandbox/wireshark-packet-penguin/src:/src
       - ${SANDBOX_DIR:-${HOME}/sandbox}:/sandbox
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      - ${XAUTHORITY:-${HOME}/.Xauthority}:/tmp/.Xauthority:ro

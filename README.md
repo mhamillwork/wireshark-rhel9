@@ -67,9 +67,18 @@ Each immediate subdirectory with a `CMakeLists.txt` is built on its own. The exa
 
 ## Compose
 
-`docker-compose.yml` mounts the workstation checkout `${HOME}/sandbox/wireshark-packet-penguin/src` at `/src`. The parent checkout is read-only at `/workspace`. The build writes `/src/build` back into that `src` directory.
+`docker-compose.yml` mounts the workstation checkout `${HOME}/sandbox/wireshark-packet-penguin/src` at `/src`. The parent checkout is read-only at `/workspace`. The build writes `/src/build` back into that `src` directory. The service uses host networking and the workstation X11 display.
+
+Run Compose from the graphical session so `DISPLAY` is set. The X11 cookie is `${XAUTHORITY}`, or `~/.Xauthority` when that variable is unset.
 
 ```bash
 docker compose up -d
 docker compose exec wireshark-compile /src/scripts/compile-wireshark.sh
+docker compose exec wireshark-compile /src/build/run/wireshark
+```
+
+If the window is refused, allow the container's root user on the local display:
+
+```bash
+xhost +SI:localuser:root
 ```
