@@ -64,3 +64,12 @@ docker exec <container> /src/scripts/build-sandbox-plugins.sh
 ```
 
 Each immediate subdirectory with a `CMakeLists.txt` is built on its own. The example is `/src/wireshark-4.6.9/doc/plugins.example`.
+
+## Compose
+
+`docker-compose.yml` mounts the workstation checkout `${HOME}/sandbox/wireshark-packet-penguin/src` at `/src`. The parent checkout is read-only at `/workspace`. The build writes `/src/build` back into that `src` directory.
+
+```bash
+docker compose up -d
+docker compose exec wireshark-compile /src/scripts/compile-wireshark.sh
+```
