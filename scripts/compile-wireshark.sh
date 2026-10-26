@@ -28,13 +28,14 @@ mkdir -p "$BUILD_DIR"
 
 cmake -S "$SRC_DIR" -B "$BUILD_DIR" -G Ninja \
   -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
-  -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX" \
-  -DBUILD_wireshark=OFF
+  -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX"
 
 cmake --build "$BUILD_DIR" --parallel "$JOBS"
 cmake --install "$BUILD_DIR"
 cmake --install "$BUILD_DIR" --component Development
 
 echo "tshark: $BUILD_DIR/run/tshark"
+echo "wireshark: $BUILD_DIR/run/wireshark"
 echo "installed: $INSTALL_PREFIX (libraries and WiresharkConfig.cmake for /sandbox plugins)"
 "$BUILD_DIR/run/tshark" -v
+QT_QPA_PLATFORM=offscreen "$BUILD_DIR/run/wireshark" --version

@@ -2,7 +2,7 @@
 
 Wireshark 4.6.9, the current stable release, and a Red Hat UBI 9 image that can compile it. The Wireshark sources are in `wireshark/` so this repository can be copied to a network that cannot reach the internet.
 
-The image builds the command-line tools (`tshark`, `dumpcap`, `editcap`, `sharkd`). UBI 9 does not include the X11 and GL libraries the Qt 6 GUI needs, so the compile sets `-DBUILD_wireshark=OFF`.
+The image has the RPMs for a full Wireshark 4.6.9 compile, including the Qt 6 GUI. UBI 9.8 supplies the compiler and most protocol libraries. Rocky Linux 9.8 and EPEL 9 supply the packages UBI does not ship: Qt 6, flex, c-ares, speexdsp, and the X11, Wayland, and GL libraries Qt needs. `libsmi` and `nghttp3` are not packaged for EL9 in those repositories, so those two features stay off.
 
 ## Base image
 

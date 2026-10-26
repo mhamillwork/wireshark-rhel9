@@ -1,6 +1,7 @@
 # Isolated GitLab: load wireshark-ubi9:dev on the runner (docker load) before
 # this job. GitLab checks out this repository, which already contains the
-# Wireshark 4.6.9 sources under wireshark/, then the job compiles them.
+# Wireshark 4.6.9 sources under wireshark/, then the job compiles them,
+# including the Qt 6 GUI.
 
 stages:
   - compile
