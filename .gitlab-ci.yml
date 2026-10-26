@@ -1,7 +1,7 @@
 # Isolated GitLab: load wireshark-ubi9:dev on the runner (docker load) before
-# this job. GitLab checks out this repository, which already contains the
-# Wireshark 4.6.9 sources under src/wireshark-4.6.9, then the job compiles them,
-# including the Qt 5 GUI from RHEL 9.
+# this job. The image contains /src/wireshark-4.6.9, /src/scripts, and
+# /src/plugins. The job runs /src/scripts/compile-wireshark.sh, including
+# the Qt 5 GUI from RHEL 9.
 
 stages:
   - compile
@@ -16,21 +16,9 @@ compile-wireshark:
     pull_policy: if-not-present
     entrypoint: [""]
   script:
-    - ./scripts/compile-wireshark.sh
-    - |
-      capture=""
-      for p in \
-        src/wireshark-4.6.9/test/captures/dhcp.pcap \
-        /src/wireshark-4.6.9/test/captures/dhcp.pcap \
-        wireshark/test/captures/dhcp.pcap
-      do
-        if [ -f "$p" ]; then
-          capture=$p
-          break
-        fi
-      done
-      test -n "$capture"
-      ./build/run/tshark -n -r "$capture"
+    - /src/scripts/compile-wireshark.sh
+    - /src/build/run/tshark -n -r /src/wireshark-4.6.9/test/captures/dhcp.pcap
+    - mkdir -p build/run && cp -a /src/build/run/. build/run/
   artifacts:
     paths:
       - build/run/
