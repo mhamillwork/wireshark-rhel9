@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
-# Configure and compile the Wireshark 4.6.9 tree in this repository.
-# Runs inside the UBI 9 compile image (GitLab CI or the compose container).
+# Configure and compile Wireshark 4.6.9.
+# Inside the image, run: /src/scripts/compile-wireshark.sh
+# Sources are /src/wireshark-4.6.9, next to this script's directory.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-# Prefer the tree copied from src/ in the GitLab repo. Fall back to a
-# checkout that still keeps the sources at wireshark/.
+# /src/scripts/compile-wireshark.sh -> /src/wireshark-4.6.9.
+# A checkout that still has src/ or wireshark/ at the repo root works too.
 if [ -z "${SRC_DIR:-}" ]; then
   SRC_DIR=""
   for candidate in \
+    "$ROOT/wireshark-4.6.9" \
     "$ROOT/src/wireshark-4.6.9" \
     "/src/wireshark-4.6.9" \
     "$ROOT/wireshark"
@@ -31,6 +33,7 @@ if [ ! -f "$SRC_DIR/CMakeLists.txt" ]; then
   echo "Wireshark sources not found at $SRC_DIR" >&2
   exit 1
 fi
+echo "Wireshark sources: $SRC_DIR"
 
 if [ ! -d "$INSTALL_PREFIX" ] || [ ! -w "$INSTALL_PREFIX" ]; then
   mkdir -p "$INSTALL_PREFIX" 2>/dev/null || true

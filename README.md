@@ -1,6 +1,6 @@
 # wireshark-rhel9
 
-Wireshark 4.6.9, the current stable release, and a Red Hat UBI 9 image that can compile it. Put the Wireshark sources at `src/wireshark-4.6.9` and dissector plugins at `src/plugins`. The image build copies `src/` to `/src`.
+Wireshark 4.6.9, the current stable release, and a Red Hat UBI 9 image that can compile it. Put Wireshark at `src/wireshark-4.6.9`, the compile scripts at `src/scripts`, and dissector plugins at `src/plugins`. The image build copies `src/` to `/src`.
 
 The image installs its RPMs from UBI 9.8 and from the RHEL 9 repositories on Satellite. UBI supplies the compiler and many protocol libraries. BaseOS, AppStream, and CodeReady Builder supply the rest, including flex, c-ares, speexdsp, and the Qt 5.15 GUI. RHEL 9 does not ship Qt 6. It also does not ship `libsmi-devel`, `nghttp3`, spandsp, iLBC, bcg729, or opencore-amr, so those features stay off.
 
@@ -31,46 +31,36 @@ docker load -i wireshark-ubi9.tar.gz
 
 ## Environment
 
-Leave `DISPLAY` unset, and leave every other environment variable unset. Compiling does not open a window. `scripts/compile-wireshark.sh` checks the GUI binary with `QT_QPA_PLATFORM=offscreen`, so that check does not need an X server. flex, c-ares, and speexdsp are found on the default pkg-config path.
+Leave `DISPLAY` unset, and leave every other environment variable unset. Compiling does not open a window. `/src/scripts/compile-wireshark.sh` checks the GUI binary with `QT_QPA_PLATFORM=offscreen`, so that check does not need an X server. flex, c-ares, and speexdsp are found on the default pkg-config path.
 
 To show the GUI on a host display, pass `DISPLAY` when you start the container and mount the X11 socket. The value depends on the host session, so it does not belong in the image. Capturing packets needs `NET_RAW` and `NET_ADMIN` on the container, not an environment variable.
 
 ## GitLab CI
 
-Push this repository to the isolated GitLab. The job uses the image already loaded on the runner, checks out this project, and compiles `src/wireshark-4.6.9`. Override the image name with CI variable `WIRESHARK_IMAGE` if the loaded tag is different.
+Push this repository to the isolated GitLab. The job uses the image already loaded on the runner and runs `/src/scripts/compile-wireshark.sh`. Override the image name with CI variable `WIRESHARK_IMAGE` if the loaded tag is different.
 
-`./build/run/tshark` is saved as a job artifact. The build is also installed to `/usr/local`, which gives `/src/plugins` `WiresharkConfig.cmake` and the libraries they link.
+`/src/build/run/tshark` is copied to `build/run/` and saved as a job artifact. The build is also installed to `/usr/local`, which gives `/src/plugins` `WiresharkConfig.cmake` and the libraries they link.
 
-The host needs Docker Compose v2 (`docker compose`).
+## Compile inside the container
 
-## Compose session and plugins
-
-`~/sandbox` is mounted at `/sandbox` in the compile container. Put each dissector plugin in its own subdirectory with a `CMakeLists.txt` (see `wireshark/doc/plugins.example`).
+The image already contains `/src/wireshark-4.6.9`, `/src/scripts`, and `/src/plugins`. Run the compile script in the container:
 
 ```bash
-mkdir -p ~/sandbox
-./scripts/clone-into-container.sh
+docker run --rm wireshark-ubi9:dev /src/scripts/compile-wireshark.sh
 ```
 
-That starts the container and clones this repository into `/src/project` inside it. The default clone is local (`file` clone of the mounted checkout) and does not use the network. To clone from the isolated GitLab instead:
+Use `podman` in place of `docker` when the image is in Podman's store. If the container is already running, use its name:
 
 ```bash
-WIRESHARK_GIT_URL=https://gitlab.example/group/wireshark-rhel9.git \
-  ./scripts/clone-into-container.sh
+docker exec <container> /src/scripts/compile-wireshark.sh
 ```
 
-Compile inside the running container:
+The script configures `/src/wireshark-4.6.9`, builds with Ninja, and installs to `/usr/local`. Binaries are at `/src/build/run/tshark` and `/src/build/run/wireshark`.
+
+After that install, build each plugin under `/src/plugins`:
 
 ```bash
-docker compose exec -w /src/project wireshark-compile ./scripts/compile-wireshark.sh
+docker exec <container> /src/scripts/build-sandbox-plugins.sh
 ```
 
-`./scripts/clone-into-container.sh --compile` clones and compiles in one step.
-
-After the headers are installed, build plugins from `/src/plugins`:
-
-```bash
-docker compose exec wireshark-compile ./scripts/build-sandbox-plugins.sh
-```
-
-`SANDBOX_DIR` changes the host directory that is mounted. `WIRESHARK_IMAGE` changes the image tag.
+Each immediate subdirectory with a `CMakeLists.txt` is built on its own. The example is `/src/wireshark-4.6.9/doc/plugins.example`.
