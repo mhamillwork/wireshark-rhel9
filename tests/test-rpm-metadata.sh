@@ -18,9 +18,11 @@ trap 'rm -rf "$tmp"' EXIT
 
 stage="$tmp/staging"
 plugin_dir="$stage/usr/local/lib64/wireshark/plugins/4.6/epan"
-mkdir -p "$stage/usr/local/bin" "$plugin_dir"
+profile_dir="$stage/usr/local/share/wireshark/profiles/No Reassembly"
+mkdir -p "$stage/usr/local/bin" "$plugin_dir" "$profile_dir"
 echo 'int main(void){return 0;}' | gcc -x c -o "$stage/usr/local/bin/tshark" -
 echo 'void plugin_register(void){}' | gcc -shared -fPIC -x c -o "$plugin_dir/packet-penguin.so" -
+printf 'reassembly off\n' > "$profile_dir/preferences"
 
 export BUILD_ROOT="$tmp/build"
 export STAGING_DIR="$stage"
@@ -38,4 +40,10 @@ mapfile -t rpms < <(find "$ARTIFACT_DIR" -type f -name 'wireshark-ppv-4.6.9-1.pp
 }
 
 "$root/src/scripts/test-rpm.sh"
+rpm -qpl "${rpms[0]}" | grep -F -q '/usr/local/share/wireshark/profiles/No Reassembly/preferences' \
+  || {
+    echo "RPM file list dropped the profile path that contains a space" >&2
+    rpm -qpl "${rpms[0]}" >&2 || true
+    exit 1
+  }
 echo "RPM metadata test passed: $(basename "${rpms[0]}")"
