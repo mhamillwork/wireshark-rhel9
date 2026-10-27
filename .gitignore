@@ -1,6 +1,6 @@
 build/
 install/
-wireshark/build/
+src/wireshark-*/build/
 artifacts/
 *.rpm
 src/rpmbuild/**/BUILD/

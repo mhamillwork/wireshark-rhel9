@@ -2,11 +2,14 @@
 # Start the compile container. Compose mounts the workstation checkout at /src:
 #   ${HOME}/sandbox/wireshark-packet-penguin/src
 #
-#   ./scripts/clone-into-container.sh
-#   ./scripts/clone-into-container.sh --compile
+#   ./src/scripts/clone-into-container.sh
+#   ./src/scripts/clone-into-container.sh --compile
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=lib/build-config.sh
+source "$SCRIPT_DIR/lib/build-config.sh"
+ROOT="$(build_checkout_root)"
 cd "$ROOT"
 
 COMPILE=0

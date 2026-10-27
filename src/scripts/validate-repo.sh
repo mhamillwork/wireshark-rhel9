@@ -6,7 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=lib/build-config.sh
 source "$SCRIPT_DIR/lib/build-config.sh"
 
-root="$(build_repo_root)"
+root="$(build_checkout_root)"
 cd "$root"
 
 build_type="${BUILD_TYPE:-dev}"
@@ -18,22 +18,23 @@ esac
 fail=0
 while IFS= read -r script; do
   bash -n "$script" || fail=1
-done < <(find scripts -name '*.sh' -type f | sort)
+done < <(find src/scripts -name '*.sh' -type f | sort)
 [ "$fail" -eq 0 ] || build_fail "shell syntax check failed"
 
 if command -v shellcheck >/dev/null 2>&1; then
-  shellcheck -x -P SCRIPTDIR scripts/*.sh scripts/lib/*.sh tests/*.sh || build_fail "shellcheck failed"
+  shellcheck -x -P SCRIPTDIR src/scripts/*.sh src/scripts/lib/*.sh tests/*.sh || build_fail "shellcheck failed"
 else
   echo "shellcheck is not installed; syntax checks ran"
 fi
 
 "$SCRIPT_DIR/compile-wireshark.sh" --rhel 9 --check
-# The version is split so this file does not contain the path it searches for.
-version_suffix="4.6.9"
-hardcoded_path="wireshark-${version_suffix}"
-if grep -RIn --exclude-dir=.git --exclude-dir=wireshark -e "$hardcoded_path" scripts .gitlab-ci.yml dockerfile versions >/dev/null 2>&1; then
+# The version comes from versions/RHEL9.env. This file does not spell the path.
+# shellcheck disable=SC1091
+source "$root/versions/RHEL9.env"
+hardcoded_path="wireshark-${WIRESHARK_VERSION}"
+if grep -RIn --exclude-dir=.git -e "$hardcoded_path" src/scripts .gitlab-ci.yml dockerfile versions >/dev/null 2>&1; then
   echo "error: a build script still hardcodes ${hardcoded_path}" >&2
-  grep -RIn --exclude-dir=.git --exclude-dir=wireshark -e "$hardcoded_path" scripts .gitlab-ci.yml dockerfile versions >&2 || true
+  grep -RIn --exclude-dir=.git -e "$hardcoded_path" src/scripts .gitlab-ci.yml dockerfile versions >&2 || true
   exit 1
 fi
 

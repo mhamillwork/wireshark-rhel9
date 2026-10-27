@@ -5,10 +5,13 @@
 # Podman is preferred so a following "podman build" sees this image and the
 # host Satellite entitlement. Docker is used when Podman is not available.
 #
-#   ./scripts/load-ubi-image.sh
+#   ./src/scripts/load-ubi-image.sh
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=lib/build-config.sh
+source "$SCRIPT_DIR/lib/build-config.sh"
+ROOT="$(build_checkout_root)"
 ARCHIVE="$ROOT/images/ubi9-ubi-9.8.tar.gz"
 TAG="registry.access.redhat.com/ubi9/ubi:9.8"
 EXPECTED_ARCHIVE_SHA256="40eff05d9d8824c8f01ca429859f77ebd1017e98ad8538fa9432a3fc2230e571"

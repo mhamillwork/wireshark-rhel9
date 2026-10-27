@@ -2,10 +2,10 @@
 # Configure and compile Wireshark, then the Packet Penguin plugins when present.
 # Versions come from versions/RHEL<n>.env.
 #
-#   ./scripts/compile-wireshark.sh --rhel 9
-#   ./scripts/compile-wireshark.sh --rhel 9 --clean --build --test
-#   ./scripts/compile-wireshark.sh --rhel 9 --package
-#   ./scripts/compile-wireshark.sh --help
+#   ./src/scripts/compile-wireshark.sh --rhel 9
+#   ./src/scripts/compile-wireshark.sh --rhel 9 --clean --build --test
+#   ./src/scripts/compile-wireshark.sh --rhel 9 --package
+#   ./src/scripts/compile-wireshark.sh --help
 set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
