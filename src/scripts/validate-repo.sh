@@ -40,7 +40,9 @@ fi
 
 grep -q 'BUILD_TYPE' .gitlab-ci.yml || build_fail ".gitlab-ci.yml has no BUILD_TYPE"
 grep -q 'wireshark-ppv' src/rpmbuild/RHEL-9/SPECS/wireshark-ppv.spec.in || build_fail "RPM spec template is missing the package name"
-grep -q 'FROM registry.access.redhat.com/ubi9/ubi:9.8' dockerfile/RHEL-9/Dockerfile || build_fail "runtime Dockerfile base image changed"
+grep -q 'artifactory.tahaa.local/tahaa-image-local/ubi9-tahaa-bootstrap:9.8' dockerfile/Dockerfile.wireshark-ubi9 || build_fail "Dockerfile bootstrap image changed"
+grep -q 'AS compile' dockerfile/Dockerfile.wireshark-ubi9 || build_fail "Dockerfile is missing the compile stage"
+grep -q 'AS runtime' dockerfile/Dockerfile.wireshark-ubi9 || build_fail "Dockerfile is missing the runtime stage"
 
 "$root/tests/test-build-config.sh"
 if command -v rpmbuild >/dev/null 2>&1; then

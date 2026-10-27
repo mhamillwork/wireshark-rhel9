@@ -42,7 +42,7 @@ else
   exit 0
 fi
 
-base="${RPM_TEST_IMAGE:-registry.access.redhat.com/ubi9/ubi:9.8}"
+base="${RPM_TEST_IMAGE:-artifactory.tahaa.local/tahaa-image-local/ubi9-tahaa-bootstrap:9.8}"
 if ! "$engine" image inspect "$base" >/dev/null 2>&1; then
   echo "Container installation test was not run: base image $base is not loaded"
   exit 0
