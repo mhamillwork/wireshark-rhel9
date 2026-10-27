@@ -37,7 +37,7 @@ With no mode flags it builds and runs the version checks. The out-of-source buil
 
 RHEL 9 has Qt 5.15, so the script passes `-DUSE_qt6=OFF`. Ninja links with the install RPATH (`$ORIGIN/../lib64`). The script symlinks the libraries from `run/` into that directory. The version check also sets `LD_LIBRARY_PATH` to `run/`.
 
-Build tools are gcc, cmake, and ninja, plus the libraries installed by the root `Dockerfile` from UBI 9 and Satellite (BaseOS, AppStream, and CodeReady Builder). Qt 6, libsmi, nghttp3, spandsp, iLBC, bcg729, and opencore-amr are not in RHEL 9 and stay off.
+Build tools are gcc, cmake, and ninja, plus the libraries installed by the `compile` stage of `dockerfile/Dockerfile.wireshark-ubi9` from the bootstrap image's RHEL 9 repositories (BaseOS, AppStream, and CodeReady Builder). Qt 6, libsmi, nghttp3, spandsp, iLBC, bcg729, and opencore-amr are not in RHEL 9 and stay off.
 
 ## RPM
 
@@ -63,17 +63,17 @@ rpm -qpl src/artifacts/rpms/rhel9/*.rpm
 
 `rpmlint` runs when it is installed. Packaging errors fail the script. Two results are filtered in `src/rpmbuild/rpmlintrc`: `dir-or-file-in-usr-local`, because the package lives under `/usr/local` beside the distribution Wireshark, and `no-signature`, because signing uses a key that is not in this repository. `invalid-license` can appear as a warning: the spec uses the SPDX id `GPL-2.0-or-later`, which older rpmlint license lists do not know. Other rpmlint errors still fail the build. On a host without `rpmlint`, the script records that the metadata checks still ran.
 
-`./src/scripts/test-rpm.sh` repeats the metadata checks. If podman or docker can see a local UBI 9 image, it also installs and removes the RPM in a container. Otherwise it says that installation test was not run.
+`./src/scripts/test-rpm.sh` repeats the metadata checks. If podman or docker can see the local bootstrap image, it also installs and removes the RPM in a container. Otherwise it says that installation test was not run.
 
 ## Runtime image
 
-The root `Dockerfile` is the compile image. The image that is published is `dockerfile/RHEL-9/Dockerfile`. It installs only the RPM onto UBI 9.8. The compile image's `dnf` transaction is what reaches Satellite; the runtime install needs those same repositories so library dependencies resolve. Do not turn TLS verification off.
+`dockerfile/Dockerfile.wireshark-ubi9` holds both images. The default target `compile` is the image tagged `wireshark-ubi9:dev`. The `runtime` target installs only the RPM onto `artifactory.tahaa.local/tahaa-image-local/ubi9-tahaa-bootstrap:9.8` and is the image that gets published. Both stages use that bootstrap, which already has the isolated-network certificates and repositories. The runtime install uses those repositories so library dependencies resolve. Do not turn TLS verification off.
 
 ```bash
 set -a
 . ./versions/RHEL9.env
 set +a
-docker build -f dockerfile/RHEL-9/Dockerfile \
+docker build -f dockerfile/Dockerfile.wireshark-ubi9 --target runtime \
   --build-arg WIRESHARK_VERSION="$WIRESHARK_VERSION" \
   --build-arg PACKET_PENGUIN_VERSION="$PACKET_PENGUIN_VERSION" \
   --build-arg RHEL_VERSION="$RHEL_VERSION" \
@@ -140,6 +140,6 @@ Edit `versions/RHEL9.env` and rename `src/wireshark-$WIRESHARK_VERSION` so the d
 - `Wireshark source directory not found`: the tree name or the `CMakeLists.txt` version does not match `WIRESHARK_VERSION`.
 - `Packet Penguin plugin directory is missing`: `--package` requires a CMake plugin under `src/plugins` or `plugins`.
 - `libwireshark.so.19: cannot open shared object file`: the build-tree binary's RPATH is `$ORIGIN/../lib64` while the libraries are in `run/`. From a checkout whose scripts live in `/src/scripts`, the binary is `/src/build/rhel9/wireshark/run/tshark`. Re-run the compile script so it recreates `src/build/rhel9/wireshark/lib64`, or link the libraries yourself: `mkdir -p /src/build/rhel9/wireshark/lib64` and `ln -sfn "../run/<library>"` for each `lib*.so*` in `run/`. The version check also accepts `LD_LIBRARY_PATH` pointed at `run/`.
-- `rpmbuild is not installed`: rebuild the compile image; `rpm-build` is in the root `Dockerfile`.
+- `rpmbuild is not installed`: rebuild the compile image; `rpm-build` is installed by the `compile` stage of `dockerfile/Dockerfile.wireshark-ubi9`.
 - `podman or docker is required`: the docker and publish jobs need a container engine on the runner.
 - Registry login failed: check the masked variables, DNS for `artifactory.tahaa.local`, and the CA trust. Do not pass `--tls-verify=false`.

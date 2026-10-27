@@ -6,7 +6,7 @@ The image installs its RPMs from UBI 9.8 and from the RHEL 9 repositories on Sat
 
 ## Base image
 
-`images/ubi9-ubi-9.8.tar.gz` is an archive of `registry.access.redhat.com/ubi9/ubi:9.8` (`sha256:16e9e43d99e181463513cc84a514859b1abb9460f1c4d9e208da4b4e51cd5cc3`), the image named by the Dockerfile `FROM` line. Load it before the build so that line does not contact the registry:
+`images/ubi9-ubi-9.8.tar.gz` is an archive of the public `registry.access.redhat.com/ubi9/ubi:9.8` image (`sha256:16e9e43d99e181463513cc84a514859b1abb9460f1c4d9e208da4b4e51cd5cc3`). The Wireshark Dockerfile does not use that image. Its base is `artifactory.tahaa.local/tahaa-image-local/ubi9-tahaa-bootstrap:9.8`. Load the public archive only when you need that UBI image locally:
 
 ```bash
 ./src/scripts/load-ubi-image.sh
@@ -16,10 +16,10 @@ The load script checks the archive checksum and the image id. It loads into Podm
 
 ## Compile image
 
-Build on a RHEL host registered to Satellite, after the base image is loaded. Podman mounts that host's entitlement into the build, which is how `dnf` reaches BaseOS, AppStream, and CodeReady Builder. Enable CodeReady Builder on the host (`codeready-builder-for-rhel-9-<arch>-rpms`); speexdsp, libpcap, Lua, and Ninja come from that repository. Use Podman for this build.
+Build where `artifactory.tahaa.local/tahaa-image-local/ubi9-tahaa-bootstrap:9.8` is already loaded or reachable. Podman on a Satellite-registered host mounts the host entitlement, which is how `dnf` reaches BaseOS, AppStream, and CodeReady Builder when the bootstrap still uses those repositories. Enable CodeReady Builder on the host (`codeready-builder-for-rhel-9-<arch>-rpms`); speexdsp, libpcap, Lua, and Ninja come from that repository. Use Podman for this build.
 
 ```bash
-podman build -t wireshark-ubi9:dev .
+podman build -f dockerfile/Dockerfile.wireshark-ubi9 -t wireshark-ubi9:dev .
 podman save wireshark-ubi9:dev | gzip > wireshark-ubi9.tar.gz
 ```
 

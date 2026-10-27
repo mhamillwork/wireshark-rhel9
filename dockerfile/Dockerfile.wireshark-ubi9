@@ -1,0 +1,144 @@
+# Wireshark on the TAHAA UBI 9.8 bootstrap.
+#
+# One file, two stages. They do not inherit each other. The bootstrap already
+# carries the isolated-network certificates, yum repositories, and hosts file.
+# The rhsm and ubi.repo steps run only when those files exist, so a Podman
+# build on a Satellite host can still use the host entitlement.
+#
+# Compile image (default target), tagged wireshark-ubi9:dev:
+#   podman build -f dockerfile/Dockerfile.wireshark-ubi9 -t wireshark-ubi9:dev .
+#
+# Runtime image, tagged wireshark-ppv:candidate. Build it after
+# src/scripts/build-rpm.sh has written the RPM. Versions come from
+# versions/RHEL9.env through --build-arg.
+#   podman build -f dockerfile/Dockerfile.wireshark-ubi9 --target runtime \
+#     -t wireshark-ppv:candidate .
+#
+# No DISPLAY is set. Compiling does not open a window.
+# /src/scripts/compile-wireshark.sh runs "wireshark --version" with
+# QT_QPA_PLATFORM=offscreen. RHEL 9 ships Qt 5.15, not Qt 6, and it does not
+# ship libsmi-devel, nghttp3, spandsp, iLBC, bcg729, or opencore-amr.
+
+ARG BOOTSTRAP_IMAGE=artifactory.tahaa.local/tahaa-image-local/ubi9-tahaa-bootstrap:9.8
+
+FROM ${BOOTSTRAP_IMAGE} AS runtime
+
+ARG WIRESHARK_VERSION
+ARG PACKET_PENGUIN_VERSION
+ARG RHEL_VERSION
+ARG GIT_COMMIT=unknown
+ARG BUILD_DATE=unknown
+ARG PIPELINE_ID=local
+ARG BUILD_TYPE=dev
+ARG RPM_DIR
+
+RUN test -n "$WIRESHARK_VERSION" \
+    && test -n "$PACKET_PENGUIN_VERSION" \
+    && test -n "$RHEL_VERSION"
+
+LABEL org.opencontainers.image.title="wireshark" \
+      org.opencontainers.image.version="${WIRESHARK_VERSION}" \
+      wireshark.version="${WIRESHARK_VERSION}" \
+      packet.penguin.version="${PACKET_PENGUIN_VERSION}" \
+      rhel.version="${RHEL_VERSION}" \
+      org.opencontainers.image.revision="${GIT_COMMIT}" \
+      org.opencontainers.image.created="${BUILD_DATE}" \
+      gitlab.pipeline.id="${PIPELINE_ID}" \
+      build.type="${BUILD_TYPE}"
+
+COPY ${RPM_DIR}/ /tmp/rpms/
+
+RUN printf 'assumeyes=1\nmax_parallel_downloads=10\ntsflags=nodocs\ninstall_weak_deps=0\n' >> /etc/dnf/dnf.conf \
+    && if [ -e /etc/rhsm-host ]; then rm -rf /etc/rhsm-host; fi \
+    && if [ -f /etc/yum.repos.d/ubi.repo ]; then sed -i '/^enabled=/a priority=1' /etc/yum.repos.d/ubi.repo; fi \
+    && dnf -y install /tmp/rpms/*.rpm \
+    && dnf clean all \
+    && rm -rf /var/cache/dnf /tmp/rpms \
+    && ln -sfn /run/secrets/rhsm /etc/rhsm-host
+
+CMD ["/usr/local/bin/tshark", "-v"]
+
+FROM ${BOOTSTRAP_IMAGE} AS compile
+
+RUN printf 'assumeyes=1\nmax_parallel_downloads=10\ntsflags=nodocs\ninstall_weak_deps=0\n' >> /etc/dnf/dnf.conf \
+    && if [ -e /etc/rhsm-host ]; then rm -rf /etc/rhsm-host; fi \
+    && if [ -f /etc/yum.repos.d/ubi.repo ]; then sed -i '/^enabled=/a priority=1' /etc/yum.repos.d/ubi.repo; fi \
+    && bash -c 'set -euo pipefail; \
+        repos=(); \
+        for repo in ubi-9-codeready-builder-rpms "codeready-builder-for-rhel-9-$(uname -m)-rpms"; do \
+          if dnf repolist --all | awk "{print \$1}" | grep -qx "$repo"; then \
+            repos+=("--enablerepo=${repo}"); \
+          fi; \
+        done; \
+        echo "CodeReady Builder repos: ${repos[*]:-none}"; \
+        dnf -y install "${repos[@]}" \
+          ca-certificates \
+          cmake \
+          curl-minimal \
+          diffutils \
+          gcc \
+          gcc-c++ \
+          git \
+          gzip \
+          m4 \
+          make \
+          ninja-build \
+          rpm-build \
+          pkgconf-pkg-config \
+          python3 \
+          tar \
+          which \
+          xz \
+          flex \
+          perl \
+          perl-Parse-Yapp \
+          gettext-devel \
+          desktop-file-utils \
+          glib2-devel \
+          libgcrypt-devel \
+          c-ares-devel \
+          pcre2-devel \
+          libxml2-devel \
+          speexdsp-devel \
+          qt5-qtbase-devel \
+          qt5-qttools-devel \
+          qt5-qtmultimedia-devel \
+          qt5-linguist \
+          qt5-qtsvg-devel \
+          qt5-qtimageformats \
+          libxkbcommon-devel \
+          libpcap-devel \
+          zlib-devel \
+          lz4-devel \
+          libzstd-devel \
+          brotli-devel \
+          libnghttp2-devel \
+          krb5-devel \
+          libcap \
+          libcap-devel \
+          libssh-devel \
+          systemd-devel \
+          lua-devel \
+          gnutls-devel \
+          snappy-devel \
+          xxhash-devel \
+          libmaxminddb-devel \
+          libnl3-devel \
+          opus-devel \
+          sbc-devel \
+          libxslt \
+          docbook-style-xsl \
+          xdg-utils \
+          hicolor-icon-theme; \
+        dnf clean all; \
+        rm -rf /var/cache/dnf' \
+    && ln -sfn /run/secrets/rhsm /etc/rhsm-host
+
+# Version configuration used by src/scripts/compile-wireshark.sh.
+COPY versions/ /opt/wireshark-build/versions/
+
+# src/wireshark-${WIRESHARK_VERSION}, src/scripts, and src/plugins.
+COPY src/ /src/
+
+WORKDIR /src
+CMD ["bash"]

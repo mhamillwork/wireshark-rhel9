@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Load the vendored UBI 9.8 base image used by the Dockerfile.
+# Load the vendored public UBI 9.8 archive. The Wireshark Dockerfile bases
+# both stages on artifactory.tahaa.local/tahaa-image-local/ubi9-tahaa-bootstrap:9.8
+# and does not use this archive.
 #
 # The archive is a docker/podman save of registry.access.redhat.com/ubi9/ubi:9.8.
 # Podman is preferred so a following "podman build" sees this image and the
