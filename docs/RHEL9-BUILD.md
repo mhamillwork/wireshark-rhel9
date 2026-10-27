@@ -43,6 +43,8 @@ Build tools are gcc, cmake, and ninja, plus the libraries installed by `dockerfi
 
 The package name is `wireshark-ppv`. It installs under `/usr/local` and does not replace the RHEL `wireshark` package. `/usr/local/bin` is normally ahead of `/usr/bin`.
 
+`--package` fills `src/build/rhel9/staging` by installing the build with `DESTDIR`. `rpmbuild` copies that directory into the RPM. Satellite is the source of the RHEL packages `dnf` pulls while the images are built. This repository publishes the runtime image to Artifactory.
+
 ```bash
 ./src/scripts/compile-wireshark.sh --rhel 9 --package
 ```
@@ -71,13 +73,15 @@ The compile image and the runtime image are separate Dockerfiles. They share the
 
 `dockerfile/Dockerfile.wireshark-ubi9-build` is the compile image, tagged `wireshark-ubi9:dev`. `docker compose up` uses that image. It does not require the runtime image to exist.
 
-`dockerfile/Dockerfile.wireshark-ubi9-runtime` is the image that gets published. It installs the RPM from `src/artifacts/rpms/rhel9/` and the packages the GUI needs on top of what the RPM requires. `install_weak_deps=0` drops recommended plugins, so the file names `qt5-qtbase-gui` (the xcb platform plugin `libqxcb.so`), `qt5-qtsvg`, `qt5-qtmultimedia`, `qt5-qtimageformats`, DejaVu fonts, fontconfig, the X11 and xcb libraries, `libxkbcommon-x11`, `mesa-libGL`, the icon theme, `dbus-libs`, and `glib2`. The image sets `QT_X11_NO_MITSHM=1` and `XDG_RUNTIME_DIR`. It does not set `DISPLAY` or `QT_QPA_PLATFORM`. Its command is `/usr/local/bin/wireshark`.
+`dockerfile/Dockerfile.wireshark-ubi9-runtime` is the image that gets published. It installs the RPM from `src/artifacts/rpms/rhel9/` and the packages the GUI needs on top of what the RPM requires. `install_weak_deps=0` drops recommended plugins, so the file names `qt5-qtbase-gui` (the xcb platform plugin `libqxcb.so`), `qt5-qtsvg`, `qt5-qtmultimedia`, `qt5-qtimageformats`, DejaVu fonts, fontconfig, the X11 and xcb libraries, `libxkbcommon-x11`, `mesa-libGL`, the icon theme, `dbus-libs`, and `glib2`. The image sets `QT_X11_NO_MITSHM=1` and `XDG_RUNTIME_DIR`. It does not set `DISPLAY` or `QT_QPA_PLATFORM`. Its command is `/usr/local/bin/wireshark`. Build it on the isolated network. `dnf` uses `satellite9b.hsv.local`, and the build container does not resolve that name, so the command passes the host mapping.
 
 ```bash
 set -a
 . ./versions/RHEL9.env
 set +a
-docker build -f dockerfile/Dockerfile.wireshark-ubi9-runtime \
+docker build \
+  --add-host satellite9b.hsv.local:10.10.106.59 \
+  -f dockerfile/Dockerfile.wireshark-ubi9-runtime \
   --build-arg WIRESHARK_VERSION="$WIRESHARK_VERSION" \
   --build-arg PACKET_PENGUIN_VERSION="$PACKET_PENGUIN_VERSION" \
   --build-arg RHEL_VERSION="$RHEL_VERSION" \
