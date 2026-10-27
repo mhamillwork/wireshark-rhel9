@@ -100,6 +100,7 @@ if [ "$DO_BUILD" -eq 1 ]; then
   # RHEL 9 ships Qt 5.15, not Qt 6. Wireshark defaults to Qt 6.
   # Ninja cannot rewrite a build-tree RPATH at install time unless CMake
   # can patch ELF. Link with the install RPATH from the start.
+  build_prepare_intree_plugins
   cmake -S "$SRC_DIR" -B "$BUILD_DIR" -G Ninja \
     -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
     -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX" \

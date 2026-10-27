@@ -21,7 +21,7 @@ There is no Packet Penguin source in this checkout, so packaging fails here unti
 
 The tests stay in `tests/` at the checkout root. The compile image copies `src/` and does not include that directory. GitLab runs `./src/scripts/validate-repo.sh`, which calls the tests from the checkout.
 
-A directory under the plugin root that has its own `CMakeLists.txt` is built out of tree after Wireshark is installed. C sources with no `CMakeLists.txt` are the in-tree dissectors: link them into the Wireshark tree and they are compiled with Wireshark, then shipped inside `libwireshark`. `--package` still requires one of those two layouts.
+A plugin `CMakeLists.txt` that calls `include(WiresharkPlugin)` is the form in `plugins/epan/gryphon`. The compile script links that directory into the Wireshark source tree at `packet-penguin-plugins/` and writes `CMakeListsCustom.txt`, and Wireshark's CMake compiles it. A `CMakeLists.txt` that calls `find_package(Wireshark)` is built after Wireshark is installed. C sources with no `CMakeLists.txt` are compiled with Wireshark when they are linked into the tree, and they ship inside `libwireshark`. `--package` still requires one of those layouts.
 
 ## Local compile
 
@@ -166,6 +166,7 @@ Edit `versions/RHEL9.env` and rename `src/wireshark-$WIRESHARK_VERSION` so the d
 - `version configuration not found`: `versions/RHEL9.env` is not beside the scripts, at `/workspace/versions` (the Compose checkout mount), or at `/opt/wireshark-build/versions` in the compile image.
 - `Wireshark source directory not found`: the tree name or the `CMakeLists.txt` version does not match `WIRESHARK_VERSION`.
 - `Packet Penguin plugin directory is missing`: `--package` requires a CMake plugin under `src/plugins` or `plugins`.
+- `include could not find requested file: WiresharkPlugin` or `Unknown CMake command "set_module_info"`: that `CMakeLists.txt` is an in-tree plugin and was configured on its own. Re-run `./src/scripts/compile-wireshark.sh` so it links the plugin into the Wireshark build before CMake runs.
 - `libwireshark.so.19: cannot open shared object file`: the build-tree binary's RPATH is `$ORIGIN/../lib64` while the libraries are in `run/`. From a checkout whose scripts live in `/src/scripts`, the binary is `/src/build/rhel9/wireshark/run/tshark`. Re-run the compile script so it recreates `src/build/rhel9/wireshark/lib64`, or link the libraries yourself: `mkdir -p /src/build/rhel9/wireshark/lib64` and `ln -sfn "../run/<library>"` for each `lib*.so*` in `run/`. The version check also accepts `LD_LIBRARY_PATH` pointed at `run/`.
 - `rpmbuild is not installed`: rebuild the compile image; `rpm-build` is installed by `dockerfile/Dockerfile.wireshark-ubi9-build`.
 - `podman or docker is required`: the docker and publish jobs need a container engine on the runner.

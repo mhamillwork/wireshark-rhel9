@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Build out-of-tree dissector plugins.
-# Each directory with a CMakeLists.txt under the plugin root is configured
-# against the Wireshark headers installed by compile-wireshark.sh.
+# Build dissector plugins that call find_package(Wireshark).
+# A CMakeLists.txt that calls include(WiresharkPlugin) is compiled inside
+# the Wireshark build. compile-wireshark.sh links those in before CMake runs.
 set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -51,19 +51,20 @@ while IFS= read -r marker; do
 done < <(find "$SANDBOX" -name PACKET_PENGUIN_VERSION -type f | sort)
 
 found=0
-shopt -s nullglob
 plugins=()
-for plugin in "$SANDBOX"/* "$SANDBOX"/*/*; do
-  [ -d "$plugin" ] || continue
-  [ -f "$plugin/CMakeLists.txt" ] || continue
+while IFS= read -r plugin; do
+  [ -n "$plugin" ] || continue
   plugins+=("$plugin")
-done
-shopt -u nullglob
+done < <(build_list_plugin_dirs "$SANDBOX")
 
 if [ "${#plugins[@]}" -gt 0 ]; then
   for plugin in "${plugins[@]}"; do
     found=1
     name="$(basename "$plugin")"
+    if build_plugin_is_intree "$plugin"; then
+      echo "Plugin $name uses include(WiresharkPlugin) and is compiled inside the Wireshark build"
+      continue
+    fi
     build_dir="$PLUGIN_BUILD_DIR/$name"
     echo "Building plugin $name"
     cmake -S "$plugin" -B "$build_dir" \
