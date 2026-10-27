@@ -42,11 +42,29 @@ filelist="$topdir/BUILD/filelist"
 : > "$filelist"
 # rpm splits an unquoted %files line on spaces. The stock profile
 # "No Reassembly" then shows up as the path Reassembly/preferences.
+# %attr overrides the staged owner and mode: root owns every file, any
+# user can execute the programs, and dumpcap can capture without a root shell.
 while IFS= read -r -d '' path; do
   case "$path" in
     *\"*) build_fail "staged path contains a double quote: $path" ;;
   esac
-  printf '"/%s"\n' "$path" >> "$filelist"
+  staged="$STAGING_DIR/$path"
+  attr='%attr(0644,root,root)'
+  caps=''
+  if [ -L "$staged" ]; then
+    attr='%attr(-,root,root)'
+  elif [ -x "$staged" ]; then
+    attr='%attr(0755,root,root)'
+  fi
+  case "$path" in
+    */bin/dumpcap)
+      if [ ! -L "$staged" ]; then
+        attr='%attr(0755,root,root)'
+        caps=' %caps(cap_net_raw,cap_net_admin=ep)'
+      fi
+      ;;
+  esac
+  printf '%s%s "/%s"\n' "$attr" "$caps" "$path" >> "$filelist"
 done < <(cd "$STAGING_DIR" && find usr/local \( -type f -o -type l \) -print0 | sort -z)
 
 spec="$topdir/SPECS/wireshark.spec"
