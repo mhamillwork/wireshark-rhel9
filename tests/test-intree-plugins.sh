@@ -99,4 +99,30 @@ EOF
 cmake -S "$compat" -B "$tmp/compat-build" >"$tmp/compat.log" 2>&1 || fail "epan plugin command was not accepted: $(cat "$tmp/compat.log")"
 grep -q 'ospl' "$tmp/compat-build/CMakeFiles/TargetDirectories.txt" || fail "epan plugin library was not created: $(cat "$tmp/compat.log")"
 
+# register_plugin_files(plugin.c plugin ${PLUGIN_FILES}) lists plugin.c as an
+# input. That is the file the command writes, so Ninja reports a self-cycle.
+cycle="$tmp/cycle"
+mkdir -p "$cycle/real/c/ospl" "$cycle/src/packet-penguin-plugins" "$cycle/src/tools"
+cp "$root/src/wireshark-"*/tools/make-plugin-reg.py "$cycle/src/tools/make-plugin-reg.py"
+cp "$root/src/wireshark-"*/cmake/modules/UseMakePluginReg.cmake "$cycle/src/UseMakePluginReg.cmake"
+printf '%s\n' 'void proto_register_ospl(void) {' '}' > "$cycle/real/c/ospl/packet-ospl.c"
+cat > "$cycle/real/c/ospl/CMakeLists.txt" <<'EOF'
+cmake_minimum_required(VERSION 3.16)
+set(DISSECTOR_SRC packet-ospl.c)
+set(PLUGIN_FILES plugin.c ${DISSECTOR_SRC})
+register_plugin_files(plugin.c plugin ${PLUGIN_FILES})
+add_custom_target(gen ALL DEPENDS plugin.c)
+EOF
+ln -sfn "$cycle/real/c/ospl" "$cycle/src/packet-penguin-plugins/c_ospl"
+cat > "$cycle/src/CMakeLists.txt" <<'EOF'
+cmake_minimum_required(VERSION 3.16)
+project(cycle C)
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+include(${CMAKE_SOURCE_DIR}/UseMakePluginReg.cmake)
+add_subdirectory(packet-penguin-plugins/c_ospl)
+EOF
+cmake -S "$cycle/src" -B "$cycle/build" -G Ninja >"$tmp/cycle-cmake.log" 2>&1 || fail "cycle fixture configure failed: $(cat "$tmp/cycle-cmake.log")"
+ninja -C "$cycle/build" >"$tmp/cycle-ninja.log" 2>&1 || fail "plugin.c generation cycled or failed: $(cat "$tmp/cycle-ninja.log")"
+grep -q 'proto_register_ospl' "$cycle/build/packet-penguin-plugins/c_ospl/plugin.c" || fail "generated plugin.c did not register ospl"
+
 echo "in-tree plugin tests passed"
