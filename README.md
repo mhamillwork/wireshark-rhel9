@@ -55,6 +55,13 @@ docker exec <container> /src/scripts/compile-wireshark.sh
 
 The script reads `versions/RHEL9.env` and configures `src/wireshark-$WIRESHARK_VERSION`. It builds with Ninja and installs to `/usr/local`. From the checkout, `tshark` is `src/build/rhel9/wireshark/run/tshark`. Inside the image that path is `/src/build/rhel9/wireshark/run/tshark`.
 
+`--clean` deletes that CMake build directory, including `CMakeCache.txt`. It leaves `src/build/rhel9/staging`, `src/build/rhel9/logs`, and anything already installed under `/usr/local`.
+
+```bash
+./src/scripts/compile-wireshark.sh --rhel 9 --clean --build
+docker exec <container> /src/scripts/compile-wireshark.sh --rhel 9 --clean --build
+```
+
 `./src/scripts/compile-wireshark.sh` compiles a plugin with Wireshark when its `CMakeLists.txt` calls `include(WiresharkPlugin)`. That is the form in `plugins/epan/gryphon`. Wireshark's CMake provides `WiresharkPlugin` and `set_module_info`, so that file is not a project on its own.
 
 A plugin that calls `find_package(Wireshark)` is built after the install. Upstream's example is `doc/plugins.example`.
