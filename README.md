@@ -1,6 +1,6 @@
 # wireshark-rhel9
 
-Wireshark and a Red Hat UBI 9 image that can compile it. Versions are in `versions/RHEL9.env` (Wireshark 4.6.9, Packet Penguin 1.0.5, RHEL 9). Wireshark is `src/wireshark-$WIRESHARK_VERSION`, with `$WIRESHARK_VERSION` taken from that file. Plugins live under `src/plugins`. Scripts live under `src/scripts`. See `docs/RHEL9-BUILD.md` for the RPM, the runtime image, and the GitLab pipeline. The image build copies `src/` to `/src`.
+Wireshark and two Red Hat UBI 9 images. `dockerfile/Dockerfile.wireshark-ubi9` compiles it. `dockerfile/Dockerfile.wireshark-runtime` installs the built RPM and the Qt packages that open the GUI. Versions are in `versions/RHEL9.env` (Wireshark 4.6.9, Packet Penguin 1.0.5, RHEL 9). Wireshark is `src/wireshark-$WIRESHARK_VERSION`, with `$WIRESHARK_VERSION` taken from that file. Plugins live under `src/plugins`. Scripts live under `src/scripts`. See `docs/RHEL9-BUILD.md` for the RPM, the runtime image, and the GitLab pipeline. The compile image copies `src/` to `/src`.
 
 The image installs its RPMs from UBI 9.8 and from the RHEL 9 repositories on Satellite. UBI supplies the compiler and many protocol libraries. BaseOS, AppStream, and CodeReady Builder supply the rest, including flex, c-ares, speexdsp, and the Qt 5.15 GUI. RHEL 9 does not ship Qt 6. It also does not ship `libsmi-devel`, `nghttp3`, spandsp, iLBC, bcg729, or opencore-amr, so those features stay off.
 
@@ -31,9 +31,9 @@ docker load -i wireshark-ubi9.tar.gz
 
 ## Environment
 
-Leave `DISPLAY` unset, and leave every other environment variable unset. Compiling does not open a window. `/src/scripts/compile-wireshark.sh` checks the GUI binary with `QT_QPA_PLATFORM=offscreen`, so that check does not need an X server. flex, c-ares, and speexdsp are found on the default pkg-config path.
+Leave `DISPLAY` unset on the compile image. Compiling does not open a window. `/src/scripts/compile-wireshark.sh` checks the GUI binary with `QT_QPA_PLATFORM=offscreen`, so that check does not need an X server. flex, c-ares, and speexdsp are found on the default pkg-config path.
 
-To show the GUI on a host display, pass `DISPLAY` when you start the container and mount the X11 socket. The value depends on the host session, so it does not belong in the image. Capturing packets needs `NET_RAW` and `NET_ADMIN` on the container, not an environment variable.
+The runtime image sets `QT_X11_NO_MITSHM=1`. It still leaves `DISPLAY` unset: pass that from the host session and mount the X11 socket when you start the container. Capturing packets needs `NET_RAW` and `NET_ADMIN` on the container. The run command is in `docs/RHEL9-BUILD.md`. `docker compose up` stays on the compile image and does not need the runtime image.
 
 ## GitLab CI
 

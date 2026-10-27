@@ -1,0 +1,110 @@
+# Runtime image, tagged wireshark-ppv:candidate and published to Artifactory.
+#
+# Build it after src/scripts/build-rpm.sh has written the RPM. Versions come
+# from versions/RHEL9.env through --build-arg. The local tag is separate from
+# wireshark-ubi9:dev so this build does not replace the compile image.
+#
+#   set -a
+#   . ./versions/RHEL9.env
+#   set +a
+#   podman build -f dockerfile/Dockerfile.wireshark-runtime \
+#     --build-arg WIRESHARK_VERSION="$WIRESHARK_VERSION" \
+#     --build-arg PACKET_PENGUIN_VERSION="$PACKET_PENGUIN_VERSION" \
+#     --build-arg RHEL_VERSION="$RHEL_VERSION" \
+#     --build-arg BUILD_TYPE=dev \
+#     --build-arg RPM_DIR="src/artifacts/rpms/rhel${RHEL_VERSION}" \
+#     -t wireshark-ppv:candidate .
+#
+# The base is the same TAHAA UBI 9.8 bootstrap as the compile image. dnf
+# installs the built RPM, then the Qt 5 platform plugin, fonts, and GL
+# libraries. install_weak_deps=0 is on, so those packages are named here:
+# the RPM requires the libraries it links, and it does not require the xcb
+# plugin or a font.
+#
+# DISPLAY is not set. The host session supplies it. QT_X11_NO_MITSHM=1 is
+# set because the MIT-SHM extension fails for a container talking to the
+# host X server. Open the GUI with:
+#
+#   podman run --rm \
+#     -e DISPLAY \
+#     -e XAUTHORITY=/tmp/.Xauthority \
+#     -v /tmp/.X11-unix:/tmp/.X11-unix \
+#     -v "${XAUTHORITY:-$HOME/.Xauthority}:/tmp/.Xauthority:ro" \
+#     --network host \
+#     --cap-add NET_RAW --cap-add NET_ADMIN \
+#     wireshark-ppv:candidate
+#
+# A check with no display overrides the command and the platform:
+#   podman run --rm -e QT_QPA_PLATFORM=offscreen wireshark-ppv:candidate \
+#     /usr/local/bin/tshark -v
+
+ARG BOOTSTRAP_IMAGE=artifactory.tahaa.local/tahaa-image-local/ubi9-tahaa-bootstrap:9.8
+
+FROM ${BOOTSTRAP_IMAGE}
+
+ARG WIRESHARK_VERSION
+ARG PACKET_PENGUIN_VERSION
+ARG RHEL_VERSION
+ARG GIT_COMMIT=unknown
+ARG BUILD_DATE=unknown
+ARG PIPELINE_ID=local
+ARG BUILD_TYPE=dev
+ARG RPM_DIR
+
+RUN test -n "$WIRESHARK_VERSION" \
+    && test -n "$PACKET_PENGUIN_VERSION" \
+    && test -n "$RHEL_VERSION" \
+    && test -n "$RPM_DIR"
+
+LABEL org.opencontainers.image.title="wireshark" \
+      org.opencontainers.image.version="${WIRESHARK_VERSION}" \
+      wireshark.version="${WIRESHARK_VERSION}" \
+      packet.penguin.version="${PACKET_PENGUIN_VERSION}" \
+      rhel.version="${RHEL_VERSION}" \
+      org.opencontainers.image.revision="${GIT_COMMIT}" \
+      org.opencontainers.image.created="${BUILD_DATE}" \
+      gitlab.pipeline.id="${PIPELINE_ID}" \
+      build.type="${BUILD_TYPE}"
+
+COPY ${RPM_DIR}/ /tmp/rpms/
+
+RUN printf 'assumeyes=1\nmax_parallel_downloads=10\ntsflags=nodocs\ninstall_weak_deps=0\n' >> /etc/dnf/dnf.conf \
+    && if [ -e /etc/rhsm-host ]; then rm -rf /etc/rhsm-host; fi \
+    && if [ -f /etc/yum.repos.d/ubi.repo ]; then sed -i '/^enabled=/a priority=1' /etc/yum.repos.d/ubi.repo; fi \
+    && dnf -y install /tmp/rpms/*.rpm \
+      qt5-qtbase \
+      qt5-qtbase-gui \
+      qt5-qtsvg \
+      qt5-qtmultimedia \
+      qt5-qtimageformats \
+      dejavu-sans-fonts \
+      fontconfig \
+      libX11 \
+      libXext \
+      libXrender \
+      libxcb \
+      libxkbcommon \
+      libxkbcommon-x11 \
+      xcb-util \
+      xcb-util-wm \
+      xcb-util-image \
+      xcb-util-keysyms \
+      xcb-util-renderutil \
+      xcb-util-cursor \
+      mesa-libGL \
+      hicolor-icon-theme \
+      dbus-libs \
+      glib2 \
+    && fc-cache -f \
+    && dnf clean all \
+    && rm -rf /var/cache/dnf /tmp/rpms \
+    && ln -sfn /run/secrets/rhsm /etc/rhsm-host \
+    && mkdir -p /tmp/runtime-wireshark \
+    && chmod 700 /tmp/runtime-wireshark
+
+# Shared-memory X11 pixmaps fail across the container boundary. DISPLAY and
+# QT_QPA_PLATFORM stay unset so the host chooses the screen and the plugin.
+ENV QT_X11_NO_MITSHM=1 \
+    XDG_RUNTIME_DIR=/tmp/runtime-wireshark
+
+CMD ["/usr/local/bin/wireshark"]

@@ -1,18 +1,15 @@
-# Wireshark on the TAHAA UBI 9.8 bootstrap.
+# Compile image, tagged wireshark-ubi9:dev.
 #
-# One file, two stages. They do not inherit each other. The bootstrap already
-# carries the isolated-network certificates, yum repositories, and hosts file.
-# The rhsm and ubi.repo steps run only when those files exist, so a Podman
-# build on a Satellite host can still use the host entitlement.
-#
-# Compile image (default target), tagged wireshark-ubi9:dev:
 #   podman build -f dockerfile/Dockerfile.wireshark-ubi9 -t wireshark-ubi9:dev .
 #
-# Runtime image, tagged wireshark-ppv:candidate. Build it after
-# src/scripts/build-rpm.sh has written the RPM. Versions come from
-# versions/RHEL9.env through --build-arg.
-#   podman build -f dockerfile/Dockerfile.wireshark-ubi9 --target runtime \
-#     -t wireshark-ppv:candidate .
+# The base is the TAHAA UBI 9.8 bootstrap. It already carries the
+# isolated-network certificates, yum repositories, and hosts file. The rhsm
+# and ubi.repo steps run only when those files exist, so a Podman build on a
+# Satellite host can still use the host entitlement.
+#
+# This file builds the compiler image only. The image that runs the Wireshark
+# GUI is dockerfile/Dockerfile.wireshark-runtime. Build that one after
+# src/scripts/build-rpm.sh has written the RPM.
 #
 # No DISPLAY is set. Compiling does not open a window.
 # /src/scripts/compile-wireshark.sh runs "wireshark --version" with
@@ -21,44 +18,7 @@
 
 ARG BOOTSTRAP_IMAGE=artifactory.tahaa.local/tahaa-image-local/ubi9-tahaa-bootstrap:9.8
 
-FROM ${BOOTSTRAP_IMAGE} AS runtime
-
-ARG WIRESHARK_VERSION
-ARG PACKET_PENGUIN_VERSION
-ARG RHEL_VERSION
-ARG GIT_COMMIT=unknown
-ARG BUILD_DATE=unknown
-ARG PIPELINE_ID=local
-ARG BUILD_TYPE=dev
-ARG RPM_DIR
-
-RUN test -n "$WIRESHARK_VERSION" \
-    && test -n "$PACKET_PENGUIN_VERSION" \
-    && test -n "$RHEL_VERSION"
-
-LABEL org.opencontainers.image.title="wireshark" \
-      org.opencontainers.image.version="${WIRESHARK_VERSION}" \
-      wireshark.version="${WIRESHARK_VERSION}" \
-      packet.penguin.version="${PACKET_PENGUIN_VERSION}" \
-      rhel.version="${RHEL_VERSION}" \
-      org.opencontainers.image.revision="${GIT_COMMIT}" \
-      org.opencontainers.image.created="${BUILD_DATE}" \
-      gitlab.pipeline.id="${PIPELINE_ID}" \
-      build.type="${BUILD_TYPE}"
-
-COPY ${RPM_DIR}/ /tmp/rpms/
-
-RUN printf 'assumeyes=1\nmax_parallel_downloads=10\ntsflags=nodocs\ninstall_weak_deps=0\n' >> /etc/dnf/dnf.conf \
-    && if [ -e /etc/rhsm-host ]; then rm -rf /etc/rhsm-host; fi \
-    && if [ -f /etc/yum.repos.d/ubi.repo ]; then sed -i '/^enabled=/a priority=1' /etc/yum.repos.d/ubi.repo; fi \
-    && dnf -y install /tmp/rpms/*.rpm \
-    && dnf clean all \
-    && rm -rf /var/cache/dnf /tmp/rpms \
-    && ln -sfn /run/secrets/rhsm /etc/rhsm-host
-
-CMD ["/usr/local/bin/tshark", "-v"]
-
-FROM ${BOOTSTRAP_IMAGE} AS compile
+FROM ${BOOTSTRAP_IMAGE}
 
 RUN printf 'assumeyes=1\nmax_parallel_downloads=10\ntsflags=nodocs\ninstall_weak_deps=0\n' >> /etc/dnf/dnf.conf \
     && if [ -e /etc/rhsm-host ]; then rm -rf /etc/rhsm-host; fi \
@@ -137,7 +97,8 @@ RUN printf 'assumeyes=1\nmax_parallel_downloads=10\ntsflags=nodocs\ninstall_weak
 # Version configuration used by src/scripts/compile-wireshark.sh.
 COPY versions/ /opt/wireshark-build/versions/
 
-# src/wireshark-${WIRESHARK_VERSION}, src/scripts, and src/plugins.
+# Wireshark sources, src/scripts, and src/plugins. The source directory name
+# follows WIRESHARK_VERSION from versions/RHEL9.env.
 COPY src/ /src/
 
 WORKDIR /src
