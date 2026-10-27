@@ -49,7 +49,7 @@ Build tools are gcc, cmake, and ninja, plus the libraries installed by `dockerfi
 
 ## RPM
 
-The package name is `wireshark-ppv`. It installs under `/usr/local` and does not replace the RHEL `wireshark` package. `/usr/local/bin` is normally ahead of `/usr/bin`.
+The package name is `wireshark`. The release is `1.ppv1.0.5.el9`. It installs under `/usr/local`. `/usr/local/bin` is normally ahead of `/usr/bin`.
 
 `--package` fills `src/build/rhel9/staging` by installing the build with `DESTDIR`. `rpmbuild` copies that directory into the RPM. Satellite is the source of the RHEL packages `dnf` pulls while the images are built. This repository publishes the runtime image to Artifactory.
 
@@ -60,7 +60,7 @@ The package name is `wireshark-ppv`. It installs under `/usr/local` and does not
 Output:
 
 ```text
-src/artifacts/rpms/rhel9/wireshark-ppv-4.6.9-1.ppv1.0.5.el9.x86_64.rpm
+src/artifacts/rpms/rhel9/wireshark-4.6.9-1.ppv1.0.5.el9.x86_64.rpm
 ```
 
 The architecture follows the build machine. Inspect it with:

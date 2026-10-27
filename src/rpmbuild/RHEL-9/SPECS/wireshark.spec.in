@@ -1,5 +1,5 @@
 # Packages a staged Wireshark install under /usr/local.
-# The package name is wireshark-ppv so it does not replace the RHEL wireshark RPM.
+# The RPM name is wireshark. The release keeps the Packet Penguin version.
 # Files stay under /usr/local. The file list does not own /usr or /usr/local.
 # rpmlint's dir-or-file-in-usr-local check is an accepted result of that choice.
 # See src/rpmbuild/rpmlintrc.
@@ -7,7 +7,7 @@
 %global debug_package %{nil}
 %global _build_id_links none
 
-Name:           wireshark-ppv
+Name:           wireshark
 Version:        @WIRESHARK_VERSION@
 Release:        @RELEASE@
 Summary:        Wireshark @WIRESHARK_VERSION@ with Packet Penguin @PACKET_PENGUIN_VERSION@
@@ -20,8 +20,7 @@ ExclusiveArch:  @ARCH@
 
 %description
 Wireshark @WIRESHARK_VERSION@ and Packet Penguin dissectors @PACKET_PENGUIN_VERSION@
-for RHEL @RHEL_VERSION@. This package installs into /usr/local and can be
-installed beside the distribution wireshark package.
+for RHEL @RHEL_VERSION@. This package installs into /usr/local.
 
 %install
 mkdir -p %{buildroot}

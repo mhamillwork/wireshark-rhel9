@@ -10,7 +10,7 @@ source "$SCRIPT_DIR/lib/build-config.sh"
 build_load_versions "${RHEL_VERSION:-9}"
 build_layout
 shopt -s nullglob
-rpms=("$ARTIFACT_DIR"/wireshark-ppv-*.rpm)
+rpms=("$ARTIFACT_DIR"/wireshark-"${WIRESHARK_VERSION}"-*.rpm)
 shopt -u nullglob
 [ "${#rpms[@]}" -ge 1 ] || build_fail "no RPM in $ARTIFACT_DIR"
 rpm_file="${rpms[0]}"
@@ -28,7 +28,7 @@ mkdir -p "$LOG_DIR"
 
 rel="${RPM_PACKAGE_RELEASE}.ppv${PACKET_PENGUIN_VERSION}.el${RHEL_VERSION}"
 rpm -qp --queryformat '%{NAME} %{VERSION} %{RELEASE} %{ARCH}\n' "$rpm_file" \
-  | grep -q "wireshark-ppv ${WIRESHARK_VERSION} ${rel}" \
+  | grep -q "^wireshark ${WIRESHARK_VERSION} ${rel} " \
   || build_fail "RPM metadata does not match the version file"
 rpm -qpl "$rpm_file" | grep -q '/usr/local/bin/tshark' || build_fail "tshark is not in the RPM"
 echo "RPM metadata checks passed"
@@ -48,6 +48,6 @@ if ! "$engine" image inspect "$base" >/dev/null 2>&1; then
   exit 0
 fi
 
-"$engine" run --rm -v "$rpm_file:/tmp/wireshark-ppv.rpm:ro" "$base" \
-  bash -lc 'dnf -y install /tmp/wireshark-ppv.rpm && /usr/local/bin/tshark -v && rpm -e wireshark-ppv'
+"$engine" run --rm -v "$rpm_file:/tmp/wireshark.rpm:ro" "$base" \
+  bash -lc 'dnf -y install /tmp/wireshark.rpm && /usr/local/bin/tshark -v && rpm -e wireshark'
 echo "Container installation test passed"

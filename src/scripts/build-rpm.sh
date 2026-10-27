@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Package the staged /usr/local tree as wireshark-ppv.
-# The package installs under /usr/local and does not replace the RHEL wireshark RPM.
+# Package the staged /usr/local tree as wireshark.
+# The RPM name is wireshark. The release keeps the Packet Penguin version.
 set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -25,8 +25,8 @@ topdir="$BUILD_ROOT/rpmbuild"
 root="$(build_repo_root)"
 spec_in=""
 for candidate in \
-  "$root/src/rpmbuild/RHEL-${RHEL_VERSION}/SPECS/wireshark-ppv.spec.in" \
-  "$root/rpmbuild/RHEL-${RHEL_VERSION}/SPECS/wireshark-ppv.spec.in"
+  "$root/src/rpmbuild/RHEL-${RHEL_VERSION}/SPECS/wireshark.spec.in" \
+  "$root/rpmbuild/RHEL-${RHEL_VERSION}/SPECS/wireshark.spec.in"
 do
   if [ -f "$candidate" ]; then
     spec_in="$candidate"
@@ -49,7 +49,7 @@ while IFS= read -r -d '' path; do
   printf '"/%s"\n' "$path" >> "$filelist"
 done < <(cd "$STAGING_DIR" && find usr/local \( -type f -o -type l \) -print0 | sort -z)
 
-spec="$topdir/SPECS/wireshark-ppv.spec"
+spec="$topdir/SPECS/wireshark.spec"
 sed \
   -e "s|@WIRESHARK_VERSION@|$WIRESHARK_VERSION|g" \
   -e "s|@PACKET_PENGUIN_VERSION@|$PACKET_PENGUIN_VERSION|g" \
@@ -67,7 +67,7 @@ rpmbuild -bb \
 
 mkdir -p "$ARTIFACT_DIR"
 find "$topdir/RPMS" -type f -name '*.rpm' -exec cp -f {} "$ARTIFACT_DIR/" \;
-rpm_file="$(find "$ARTIFACT_DIR" -type f -name "wireshark-ppv-${WIRESHARK_VERSION}-${release}.${arch}.rpm" | head -1)"
+rpm_file="$(find "$ARTIFACT_DIR" -type f -name "wireshark-${WIRESHARK_VERSION}-${release}.${arch}.rpm" | head -1)"
 [ -n "$rpm_file" ] || build_fail "expected RPM was not produced"
 echo "RPM: $rpm_file"
 
@@ -85,7 +85,7 @@ name="$(rpm -qp --queryformat '%{NAME}' "$rpm_file")"
 ver="$(rpm -qp --queryformat '%{VERSION}' "$rpm_file")"
 rel="$(rpm -qp --queryformat '%{RELEASE}' "$rpm_file")"
 got_arch="$(rpm -qp --queryformat '%{ARCH}' "$rpm_file")"
-[ "$name" = "wireshark-ppv" ] || build_fail "RPM name is $name"
+[ "$name" = "wireshark" ] || build_fail "RPM name is $name"
 [ "$ver" = "$WIRESHARK_VERSION" ] || build_fail "RPM version is $ver"
 [ "$rel" = "$release" ] || build_fail "RPM release is $rel"
 [ "$got_arch" = "$arch" ] || build_fail "RPM arch is $got_arch"
