@@ -55,13 +55,13 @@ docker exec <container> /src/scripts/compile-wireshark.sh
 
 The script reads `versions/RHEL9.env` and configures `src/wireshark-$WIRESHARK_VERSION`. It builds with Ninja and installs to `/usr/local`. From the checkout, `tshark` is `src/build/rhel9/wireshark/run/tshark`. Inside the image that path is `/src/build/rhel9/wireshark/run/tshark`.
 
-After that install, build each plugin under `/src/plugins`:
+`./src/scripts/compile-wireshark.sh` compiles a plugin with Wireshark when its `CMakeLists.txt` calls `include(WiresharkPlugin)`. That is the form in `plugins/epan/gryphon`. Wireshark's CMake provides `WiresharkPlugin` and `set_module_info`, so that file is not a project on its own.
+
+A plugin that calls `find_package(Wireshark)` is built after the install. Upstream's example is `doc/plugins.example`.
 
 ```bash
 docker exec <container> /src/scripts/build-sandbox-plugins.sh
 ```
-
-Each directory with a `CMakeLists.txt` under the plugin root is built on its own. Upstream's example is `doc/plugins.example` in the Wireshark tree.
 
 ## Compose
 

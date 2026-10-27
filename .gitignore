@@ -1,6 +1,8 @@
 build/
 install/
 src/wireshark-*/build/
+src/wireshark-*/CMakeListsCustom.txt
+src/wireshark-*/packet-penguin-plugins/
 artifacts/
 *.rpm
 src/rpmbuild/**/BUILD/

@@ -54,6 +54,7 @@ if grep -q 'AS runtime' dockerfile/Dockerfile.wireshark-ubi9-build; then
 fi
 
 "$root/tests/test-build-config.sh"
+"$root/tests/test-intree-plugins.sh"
 if command -v rpmbuild >/dev/null 2>&1; then
   "$root/tests/test-rpm-metadata.sh"
 else
