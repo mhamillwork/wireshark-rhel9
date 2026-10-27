@@ -37,7 +37,7 @@ With no mode flags it builds and runs the version checks. The out-of-source buil
 
 RHEL 9 has Qt 5.15, so the script passes `-DUSE_qt6=OFF`. Ninja links with the install RPATH (`$ORIGIN/../lib64`). The script symlinks the libraries from `run/` into that directory. The version check also sets `LD_LIBRARY_PATH` to `run/`.
 
-Build tools are gcc, cmake, and ninja, plus the libraries installed by `dockerfile/Dockerfile.wireshark-ubi9` from the bootstrap image's RHEL 9 repositories (BaseOS, AppStream, and CodeReady Builder). Qt 6, libsmi, nghttp3, spandsp, iLBC, bcg729, and opencore-amr are not in RHEL 9 and stay off.
+Build tools are gcc, cmake, and ninja, plus the libraries installed by `dockerfile/Dockerfile.wireshark-ubi9-build` from the bootstrap image's RHEL 9 repositories (BaseOS, AppStream, and CodeReady Builder). Qt 6, libsmi, nghttp3, spandsp, iLBC, bcg729, and opencore-amr are not in RHEL 9 and stay off.
 
 ## RPM
 
@@ -69,15 +69,15 @@ rpm -qpl src/artifacts/rpms/rhel9/*.rpm
 
 The compile image and the runtime image are separate Dockerfiles. They share the bootstrap `artifactory.tahaa.local/tahaa-image-local/ubi9-tahaa-bootstrap:9.8`, which already has the isolated-network certificates and repositories. They do not inherit each other: the published image does not contain the compiler. Do not turn TLS verification off.
 
-`dockerfile/Dockerfile.wireshark-ubi9` is the compile image, tagged `wireshark-ubi9:dev`. `docker compose up` uses that image. It does not require the runtime image to exist.
+`dockerfile/Dockerfile.wireshark-ubi9-build` is the compile image, tagged `wireshark-ubi9:dev`. `docker compose up` uses that image. It does not require the runtime image to exist.
 
-`dockerfile/Dockerfile.wireshark-runtime` is the image that gets published. It installs the RPM from `src/artifacts/rpms/rhel9/` and the packages the GUI needs on top of what the RPM requires. `install_weak_deps=0` drops recommended plugins, so the file names `qt5-qtbase-gui` (the xcb platform plugin `libqxcb.so`), `qt5-qtsvg`, `qt5-qtmultimedia`, `qt5-qtimageformats`, DejaVu fonts, fontconfig, the X11 and xcb libraries, `libxkbcommon-x11`, `mesa-libGL`, the icon theme, `dbus-libs`, and `glib2`. The image sets `QT_X11_NO_MITSHM=1` and `XDG_RUNTIME_DIR`. It does not set `DISPLAY` or `QT_QPA_PLATFORM`. Its command is `/usr/local/bin/wireshark`.
+`dockerfile/Dockerfile.wireshark-ubi9-runtime` is the image that gets published. It installs the RPM from `src/artifacts/rpms/rhel9/` and the packages the GUI needs on top of what the RPM requires. `install_weak_deps=0` drops recommended plugins, so the file names `qt5-qtbase-gui` (the xcb platform plugin `libqxcb.so`), `qt5-qtsvg`, `qt5-qtmultimedia`, `qt5-qtimageformats`, DejaVu fonts, fontconfig, the X11 and xcb libraries, `libxkbcommon-x11`, `mesa-libGL`, the icon theme, `dbus-libs`, and `glib2`. The image sets `QT_X11_NO_MITSHM=1` and `XDG_RUNTIME_DIR`. It does not set `DISPLAY` or `QT_QPA_PLATFORM`. Its command is `/usr/local/bin/wireshark`.
 
 ```bash
 set -a
 . ./versions/RHEL9.env
 set +a
-docker build -f dockerfile/Dockerfile.wireshark-runtime \
+docker build -f dockerfile/Dockerfile.wireshark-ubi9-runtime \
   --build-arg WIRESHARK_VERSION="$WIRESHARK_VERSION" \
   --build-arg PACKET_PENGUIN_VERSION="$PACKET_PENGUIN_VERSION" \
   --build-arg RHEL_VERSION="$RHEL_VERSION" \
@@ -163,6 +163,6 @@ Edit `versions/RHEL9.env` and rename `src/wireshark-$WIRESHARK_VERSION` so the d
 - `Wireshark source directory not found`: the tree name or the `CMakeLists.txt` version does not match `WIRESHARK_VERSION`.
 - `Packet Penguin plugin directory is missing`: `--package` requires a CMake plugin under `src/plugins` or `plugins`.
 - `libwireshark.so.19: cannot open shared object file`: the build-tree binary's RPATH is `$ORIGIN/../lib64` while the libraries are in `run/`. From a checkout whose scripts live in `/src/scripts`, the binary is `/src/build/rhel9/wireshark/run/tshark`. Re-run the compile script so it recreates `src/build/rhel9/wireshark/lib64`, or link the libraries yourself: `mkdir -p /src/build/rhel9/wireshark/lib64` and `ln -sfn "../run/<library>"` for each `lib*.so*` in `run/`. The version check also accepts `LD_LIBRARY_PATH` pointed at `run/`.
-- `rpmbuild is not installed`: rebuild the compile image; `rpm-build` is installed by `dockerfile/Dockerfile.wireshark-ubi9`.
+- `rpmbuild is not installed`: rebuild the compile image; `rpm-build` is installed by `dockerfile/Dockerfile.wireshark-ubi9-build`.
 - `podman or docker is required`: the docker and publish jobs need a container engine on the runner.
 - Registry login failed: check the masked variables, DNS for `artifactory.tahaa.local`, and the CA trust. Do not pass `--tls-verify=false`.
