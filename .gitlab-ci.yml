@@ -104,7 +104,7 @@ docker-image:
       # shellcheck disable=SC1091
       . ./versions/RHEL9.env
       set +a
-      "$engine" build -f dockerfile/Dockerfile.wireshark-ubi9 --target runtime \
+      "$engine" build -f dockerfile/Dockerfile.wireshark-runtime \
         --build-arg "WIRESHARK_VERSION=${WIRESHARK_VERSION}" \
         --build-arg "PACKET_PENGUIN_VERSION=${PACKET_PENGUIN_VERSION}" \
         --build-arg "RHEL_VERSION=${RHEL_VERSION}" \
@@ -114,7 +114,10 @@ docker-image:
         --build-arg "BUILD_TYPE=${BUILD_TYPE}" \
         --build-arg "RPM_DIR=src/artifacts/rpms/rhel${RHEL_VERSION}" \
         -t "${LOCAL_IMAGE}" .
-      "$engine" run --rm "${LOCAL_IMAGE}"
+      # The image command is the GUI. This job has no display, so both
+      # binaries are checked with the offscreen Qt platform.
+      "$engine" run --rm -e QT_QPA_PLATFORM=offscreen "${LOCAL_IMAGE}" /usr/local/bin/tshark -v
+      "$engine" run --rm -e QT_QPA_PLATFORM=offscreen "${LOCAL_IMAGE}" /usr/local/bin/wireshark --version
       mkdir -p src/artifacts
       "$engine" save -o src/artifacts/wireshark-image.tar "${LOCAL_IMAGE}"
   artifacts:
