@@ -104,7 +104,7 @@ docker-image:
       # shellcheck disable=SC1091
       . ./versions/RHEL9.env
       set +a
-      "$engine" build -f dockerfile/Dockerfile.wireshark-runtime \
+      "$engine" build -f dockerfile/Dockerfile.wireshark-ubi9-runtime \
         --build-arg "WIRESHARK_VERSION=${WIRESHARK_VERSION}" \
         --build-arg "PACKET_PENGUIN_VERSION=${PACKET_PENGUIN_VERSION}" \
         --build-arg "RHEL_VERSION=${RHEL_VERSION}" \

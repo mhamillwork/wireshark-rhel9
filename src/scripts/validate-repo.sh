@@ -40,14 +40,14 @@ fi
 
 grep -q 'BUILD_TYPE' .gitlab-ci.yml || build_fail ".gitlab-ci.yml has no BUILD_TYPE"
 grep -q 'wireshark-ppv' src/rpmbuild/RHEL-9/SPECS/wireshark-ppv.spec.in || build_fail "RPM spec template is missing the package name"
-grep -q 'artifactory.tahaa.local/tahaa-image-local/ubi9-tahaa-bootstrap:9.8' dockerfile/Dockerfile.wireshark-ubi9 || build_fail "compile Dockerfile bootstrap image changed"
-grep -q 'artifactory.tahaa.local/tahaa-image-local/ubi9-tahaa-bootstrap:9.8' dockerfile/Dockerfile.wireshark-runtime || build_fail "runtime Dockerfile bootstrap image changed"
-grep -q 'qt5-qtbase-gui' dockerfile/Dockerfile.wireshark-runtime || build_fail "runtime image is missing the Qt xcb platform package"
-grep -q 'QT_X11_NO_MITSHM=1' dockerfile/Dockerfile.wireshark-runtime || build_fail "runtime image is missing QT_X11_NO_MITSHM"
-grep -q '/usr/local/bin/wireshark' dockerfile/Dockerfile.wireshark-runtime || build_fail "runtime image command is not the Wireshark GUI"
-grep -q 'Dockerfile.wireshark-runtime' .gitlab-ci.yml || build_fail "GitLab docker job does not build the runtime Dockerfile"
+grep -q 'artifactory.tahaa.local/tahaa-image-local/ubi9-tahaa-bootstrap:9.8' dockerfile/Dockerfile.wireshark-ubi9-build || build_fail "compile Dockerfile bootstrap image changed"
+grep -q 'artifactory.tahaa.local/tahaa-image-local/ubi9-tahaa-bootstrap:9.8' dockerfile/Dockerfile.wireshark-ubi9-runtime || build_fail "runtime Dockerfile bootstrap image changed"
+grep -q 'qt5-qtbase-gui' dockerfile/Dockerfile.wireshark-ubi9-runtime || build_fail "runtime image is missing the Qt xcb platform package"
+grep -q 'QT_X11_NO_MITSHM=1' dockerfile/Dockerfile.wireshark-ubi9-runtime || build_fail "runtime image is missing QT_X11_NO_MITSHM"
+grep -q '/usr/local/bin/wireshark' dockerfile/Dockerfile.wireshark-ubi9-runtime || build_fail "runtime image command is not the Wireshark GUI"
+grep -q 'Dockerfile.wireshark-ubi9-runtime' .gitlab-ci.yml || build_fail "GitLab docker job does not build the runtime Dockerfile"
 grep -q 'QT_QPA_PLATFORM=offscreen' .gitlab-ci.yml || build_fail "GitLab docker job would start the GUI with no display"
-if grep -q 'AS runtime' dockerfile/Dockerfile.wireshark-ubi9; then
+if grep -q 'AS runtime' dockerfile/Dockerfile.wireshark-ubi9-build; then
   build_fail "compile Dockerfile still contains the runtime stage"
 fi
 

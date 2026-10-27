@@ -1,6 +1,6 @@
 # wireshark-rhel9
 
-Wireshark and two Red Hat UBI 9 images. `dockerfile/Dockerfile.wireshark-ubi9` compiles it. `dockerfile/Dockerfile.wireshark-runtime` installs the built RPM and the Qt packages that open the GUI. Versions are in `versions/RHEL9.env` (Wireshark 4.6.9, Packet Penguin 1.0.5, RHEL 9). Wireshark is `src/wireshark-$WIRESHARK_VERSION`, with `$WIRESHARK_VERSION` taken from that file. Plugins live under `src/plugins`. Scripts live under `src/scripts`. See `docs/RHEL9-BUILD.md` for the RPM, the runtime image, and the GitLab pipeline. The compile image copies `src/` to `/src`.
+Wireshark and two Red Hat UBI 9 images. `dockerfile/Dockerfile.wireshark-ubi9-build` compiles it. `dockerfile/Dockerfile.wireshark-ubi9-runtime` installs the built RPM and the Qt packages that open the GUI. Versions are in `versions/RHEL9.env` (Wireshark 4.6.9, Packet Penguin 1.0.5, RHEL 9). Wireshark is `src/wireshark-$WIRESHARK_VERSION`, with `$WIRESHARK_VERSION` taken from that file. Plugins live under `src/plugins`. Scripts live under `src/scripts`. See `docs/RHEL9-BUILD.md` for the RPM, the runtime image, and the GitLab pipeline. The compile image copies `src/` to `/src`.
 
 The image installs its RPMs from UBI 9.8 and from the RHEL 9 repositories on Satellite. UBI supplies the compiler and many protocol libraries. BaseOS, AppStream, and CodeReady Builder supply the rest, including flex, c-ares, speexdsp, and the Qt 5.15 GUI. RHEL 9 does not ship Qt 6. It also does not ship `libsmi-devel`, `nghttp3`, spandsp, iLBC, bcg729, or opencore-amr, so those features stay off.
 
@@ -19,7 +19,7 @@ The load script checks the archive checksum and the image id. It loads into Podm
 Build where `artifactory.tahaa.local/tahaa-image-local/ubi9-tahaa-bootstrap:9.8` is already loaded or reachable. Podman on a Satellite-registered host mounts the host entitlement, which is how `dnf` reaches BaseOS, AppStream, and CodeReady Builder when the bootstrap still uses those repositories. Enable CodeReady Builder on the host (`codeready-builder-for-rhel-9-<arch>-rpms`); speexdsp, libpcap, Lua, and Ninja come from that repository. Use Podman for this build.
 
 ```bash
-podman build -f dockerfile/Dockerfile.wireshark-ubi9 -t wireshark-ubi9:dev .
+podman build -f dockerfile/Dockerfile.wireshark-ubi9-build -t wireshark-ubi9:dev .
 podman save wireshark-ubi9:dev | gzip > wireshark-ubi9.tar.gz
 ```
 
