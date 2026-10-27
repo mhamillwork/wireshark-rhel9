@@ -1,12 +1,12 @@
 # Compile image, tagged wireshark-ubi9:dev.
 #
-#   podman build --add-host satellite9b.hsv.local:10.10.106.59 \
+#   docker build --add-host satellite9b.hsv.local:10.10.106.59 \
 #     -f dockerfile/Dockerfile.wireshark-ubi9-build -t wireshark-ubi9:dev .
 #
 # The base is the TAHAA UBI 9.8 bootstrap. It already carries the
 # isolated-network certificates, yum repositories, and hosts file. The rhsm
-# and ubi.repo steps run only when those files exist, so a Podman build on a
-# Satellite host can still use the host entitlement.
+# and ubi.repo steps run only when those files exist, so a bootstrap image
+# that does not include them still builds.
 #
 # This file builds the compiler image only. The image that runs the Wireshark
 # GUI is dockerfile/Dockerfile.wireshark-ubi9-runtime. Build that one after

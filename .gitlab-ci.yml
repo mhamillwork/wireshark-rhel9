@@ -1,5 +1,5 @@
 # RHEL 9 build. The runner must already have the compile image loaded
-# (docker load / podman load). Pulling a public image is not required.
+# (docker load). Pulling a public image is not required.
 #
 # Development pipelines publish:
 #   <version>-ppv<plugin>-rhel9-dev-<user>
@@ -96,15 +96,12 @@ docker-image:
     - test -n "$(find src/artifacts/rpms/rhel9 -name '*.rpm' -print -quit)"
     - |
       set -euo pipefail
-      if command -v podman >/dev/null 2>&1; then engine=podman
-      elif command -v docker >/dev/null 2>&1; then engine=docker
-      else echo "podman or docker is required to build the runtime image" >&2; exit 1
-      fi
+      command -v docker >/dev/null 2>&1 || { echo "docker is required to build the runtime image" >&2; exit 1; }
       set -a
       # shellcheck disable=SC1091
       . ./versions/RHEL9.env
       set +a
-      "$engine" build --add-host satellite9b.hsv.local:10.10.106.59 \
+      docker build --add-host satellite9b.hsv.local:10.10.106.59 \
         -f dockerfile/Dockerfile.wireshark-ubi9-runtime \
         --build-arg "WIRESHARK_VERSION=${WIRESHARK_VERSION}" \
         --build-arg "PACKET_PENGUIN_VERSION=${PACKET_PENGUIN_VERSION}" \
@@ -117,10 +114,10 @@ docker-image:
         -t "${LOCAL_IMAGE}" .
       # The image command is the GUI. This job has no display, so both
       # binaries are checked with the offscreen Qt platform.
-      "$engine" run --rm -e QT_QPA_PLATFORM=offscreen "${LOCAL_IMAGE}" /usr/local/bin/tshark -v
-      "$engine" run --rm -e QT_QPA_PLATFORM=offscreen "${LOCAL_IMAGE}" /usr/local/bin/wireshark --version
+      docker run --rm -e QT_QPA_PLATFORM=offscreen "${LOCAL_IMAGE}" /usr/local/bin/tshark -v
+      docker run --rm -e QT_QPA_PLATFORM=offscreen "${LOCAL_IMAGE}" /usr/local/bin/wireshark --version
       mkdir -p src/artifacts
-      "$engine" save -o src/artifacts/wireshark-image.tar "${LOCAL_IMAGE}"
+      docker save -o src/artifacts/wireshark-image.tar "${LOCAL_IMAGE}"
   artifacts:
     paths:
       - src/artifacts/build-metadata.json
@@ -140,11 +137,8 @@ publish:
   script:
     - |
       set -euo pipefail
-      if command -v podman >/dev/null 2>&1; then engine=podman
-      elif command -v docker >/dev/null 2>&1; then engine=docker
-      else echo "podman or docker is required to publish" >&2; exit 1
-      fi
-      "$engine" load -i src/artifacts/wireshark-image.tar
+      command -v docker >/dev/null 2>&1 || { echo "docker is required to publish" >&2; exit 1; }
+      docker load -i src/artifacts/wireshark-image.tar
     - ./src/scripts/publish-image.sh
     - ./src/scripts/write-build-metadata.sh
   artifacts:
