@@ -38,17 +38,8 @@ fi
 
 docker_cmd compose up -d
 
-docker_cmd compose exec -T wireshark-compile bash -lc '
-  set -euo pipefail
-  if [ ! -f /src/wireshark-4.6.9/CMakeLists.txt ]; then
-    echo "Wireshark sources not found at /src/wireshark-4.6.9" >&2
-    echo "Compose mounts ~/sandbox/wireshark-packet-penguin/src on /src." >&2
-    exit 1
-  fi
-  echo "Wireshark sources: /src/wireshark-4.6.9"
-  echo "Dissector plugins: /src/plugins"
-'
+docker_cmd compose exec -T wireshark-compile /src/scripts/compile-wireshark.sh --rhel 9 --check
 
 if [ "$COMPILE" -eq 1 ]; then
-  docker_cmd compose exec -T wireshark-compile /src/scripts/compile-wireshark.sh
+  docker_cmd compose exec -T wireshark-compile /src/scripts/compile-wireshark.sh --rhel 9 --build --test
 fi

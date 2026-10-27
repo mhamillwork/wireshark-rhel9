@@ -1,6 +1,6 @@
 # wireshark-rhel9
 
-Wireshark 4.6.9, the current stable release, and a Red Hat UBI 9 image that can compile it. Put Wireshark at `src/wireshark-4.6.9`, the compile scripts at `src/scripts`, and dissector plugins at `src/plugins`. The image build copies `src/` to `/src`.
+Wireshark and a Red Hat UBI 9 image that can compile it. Versions are in `versions/RHEL9.env` (Wireshark 4.6.9, Packet Penguin 1.0.5, RHEL 9). The compile script accepts `src/wireshark-$WIRESHARK_VERSION` or a `wireshark/` tree of that version, and plugins under `src/plugins`. See `docs/RHEL9-BUILD.md` for the RPM, the runtime image, and the GitLab pipeline. The image build copies `src/` to `/src`.
 
 The image installs its RPMs from UBI 9.8 and from the RHEL 9 repositories on Satellite. UBI supplies the compiler and many protocol libraries. BaseOS, AppStream, and CodeReady Builder supply the rest, including flex, c-ares, speexdsp, and the Qt 5.15 GUI. RHEL 9 does not ship Qt 6. It also does not ship `libsmi-devel`, `nghttp3`, spandsp, iLBC, bcg729, or opencore-amr, so those features stay off.
 
@@ -37,13 +37,13 @@ To show the GUI on a host display, pass `DISPLAY` when you start the container a
 
 ## GitLab CI
 
-Push this repository to the isolated GitLab. The job uses the image already loaded on the runner and runs `/src/scripts/compile-wireshark.sh`. Override the image name with CI variable `WIRESHARK_IMAGE` if the loaded tag is different.
+Push this repository to the isolated GitLab. Jobs use the image already loaded on the runner. The development pipeline validates, compiles, tests, builds the RPM, and publishes the development image. Override the image name with CI variable `WIRESHARK_IMAGE` if the loaded tag is different. Details are in `docs/RHEL9-BUILD.md`.
 
-`/src/build/run/tshark` is copied to `build/run/` and saved as a job artifact. The build is also installed to `/usr/local`, which gives `/src/plugins` `WiresharkConfig.cmake` and the libraries they link.
+The compile job saves `build/rhel9/wireshark/run/`. The build is also installed to `/usr/local`, which gives plugins `WiresharkConfig.cmake` and the libraries they link.
 
 ## Compile inside the container
 
-The image already contains `/src/wireshark-4.6.9`, `/src/scripts`, and `/src/plugins`. Run the compile script in the container:
+The image already contains the Wireshark tree, `/src/scripts`, and `/src/plugins`. Run the compile script in the container:
 
 ```bash
 docker run --rm wireshark-ubi9:dev /src/scripts/compile-wireshark.sh
@@ -55,7 +55,7 @@ Use `podman` in place of `docker` when the image is in Podman's store. If the co
 docker exec <container> /src/scripts/compile-wireshark.sh
 ```
 
-The script configures `/src/wireshark-4.6.9`, builds with Ninja, and installs to `/usr/local`. Binaries are at `/src/build/run/tshark` and `/src/build/run/wireshark`.
+The script reads `versions/RHEL9.env`, configures the matching Wireshark tree, builds with Ninja, and installs to `/usr/local`. Binaries are at `build/rhel9/wireshark/run/tshark` and `build/rhel9/wireshark/run/wireshark`. Inside the image whose scripts live in `/src/scripts`, that path is `/src/build/rhel9/wireshark/run/`.
 
 After that install, build each plugin under `/src/plugins`:
 
@@ -63,7 +63,7 @@ After that install, build each plugin under `/src/plugins`:
 docker exec <container> /src/scripts/build-sandbox-plugins.sh
 ```
 
-Each immediate subdirectory with a `CMakeLists.txt` is built on its own. The example is `/src/wireshark-4.6.9/doc/plugins.example`.
+Each directory with a `CMakeLists.txt` under the plugin root is built on its own. Upstream's example is `doc/plugins.example` in the Wireshark tree.
 
 ## Compose
 
@@ -74,7 +74,7 @@ Run Compose from the graphical session so `DISPLAY` is set. The X11 cookie is `$
 ```bash
 docker compose up -d
 docker compose exec wireshark-compile /src/scripts/compile-wireshark.sh
-docker compose exec wireshark-compile /src/build/run/wireshark
+docker compose exec wireshark-compile /src/build/rhel9/wireshark/run/wireshark
 ```
 
 If the window is refused, allow the container's root user on the local display:

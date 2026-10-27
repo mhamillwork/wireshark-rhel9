@@ -15,8 +15,8 @@
 #   ./scripts/load-ubi-image.sh
 #   podman build -t wireshark-ubi9:dev .
 #
-# The build context's src/ directory is copied to /src:
-#   /src/wireshark-4.6.9  /src/scripts  /src/plugins
+# The build context's src/ directory is copied to /src. A GitLab checkout
+# puts wireshark-$WIRESHARK_VERSION, scripts, and plugins there.
 # Compile inside the image with /src/scripts/compile-wireshark.sh.
 
 FROM registry.access.redhat.com/ubi9/ubi:9.8
@@ -44,6 +44,7 @@ RUN printf 'assumeyes=1\nmax_parallel_downloads=10\ntsflags=nodocs\ninstall_weak
           m4 \
           make \
           ninja-build \
+          rpm-build \
           pkgconf-pkg-config \
           python3 \
           tar \
@@ -94,7 +95,10 @@ RUN printf 'assumeyes=1\nmax_parallel_downloads=10\ntsflags=nodocs\ninstall_weak
         rm -rf /var/cache/dnf' \
     && ln -s /run/secrets/rhsm /etc/rhsm-host
 
-# src/wireshark-4.6.9 and src/plugins from the GitLab checkout.
+# Version configuration used by scripts/compile-wireshark.sh.
+COPY versions/ /opt/wireshark-build/versions/
+
+# src/wireshark-${WIRESHARK_VERSION} and src/plugins from the GitLab checkout.
 COPY src/ /src/
 
 WORKDIR /src
