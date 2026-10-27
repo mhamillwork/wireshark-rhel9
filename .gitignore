@@ -1,3 +1,10 @@
 build/
 install/
 wireshark/build/
+artifacts/
+*.rpm
+src/rpmbuild/**/BUILD/
+src/rpmbuild/**/BUILDROOT/
+src/rpmbuild/**/RPMS/
+src/rpmbuild/**/SOURCES/
+src/rpmbuild/**/SRPMS/

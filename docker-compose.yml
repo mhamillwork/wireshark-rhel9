@@ -6,7 +6,7 @@
 # back to ${HOME}/sandbox/wireshark-packet-penguin/src.
 #
 # Host networking lets Wireshark see the workstation interfaces. The X11
-# socket and DISPLAY let /src/build/run/wireshark open on the workstation
+# socket and DISPLAY let /src/build/rhel9/wireshark/run/wireshark open on the workstation
 # display. Run Compose from that graphical session so DISPLAY is set.
 services:
   wireshark-compile:
