@@ -19,13 +19,8 @@ esac
 [ -n "${ARTIFACTORY_USERNAME:-}" ] || build_fail "ARTIFACTORY_USERNAME is unset"
 [ -n "${ARTIFACTORY_PASSWORD:-}" ] || build_fail "ARTIFACTORY_PASSWORD is unset"
 
-if command -v podman >/dev/null 2>&1; then
-  engine=podman
-elif command -v docker >/dev/null 2>&1; then
-  engine=docker
-else
-  build_fail "podman or docker is required to publish"
-fi
+command -v docker >/dev/null 2>&1 || build_fail "docker is required to publish"
+engine=docker
 
 repo="$(build_image_repo)"
 release="$(build_release_tag)"

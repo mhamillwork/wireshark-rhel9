@@ -12,16 +12,16 @@ The image installs its RPMs from UBI 9.8 and from the RHEL 9 repositories on Sat
 ./src/scripts/load-ubi-image.sh
 ```
 
-The load script checks the archive checksum and the image id. It loads into Podman when Podman is available, and into Docker otherwise.
+The load script checks the archive checksum and the image id, then loads the archive with Docker.
 
 ## Compile image
 
-Build on the isolated network, where `artifactory.tahaa.local/tahaa-image-local/ubi9-tahaa-bootstrap:9.8` is already loaded or reachable. The image stays in the local Podman store. Podman on a Satellite-registered host mounts the host entitlement, which is how `dnf` reaches BaseOS, AppStream, and CodeReady Builder when the bootstrap still uses those repositories. Enable CodeReady Builder on the host (`codeready-builder-for-rhel-9-<arch>-rpms`); speexdsp, libpcap, Lua, and Ninja come from that repository. Use Podman for this build.
+Build on the isolated network, where `artifactory.tahaa.local/tahaa-image-local/ubi9-tahaa-bootstrap:9.8` is already loaded or reachable. The image stays in the local Docker store. The bootstrap image carries the RHEL 9 repositories. speexdsp, libpcap, Lua, and Ninja come from CodeReady Builder when that repository is present in the bootstrap. Use Docker for this build.
 
 `satellite9b.hsv.local` is the Satellite server those repositories use. The build only pulls packages from it. The build container does not resolve that name, so pass it on the command line. `--add-host` is local to that build.
 
 ```bash
-podman build \
+docker build \
   --add-host satellite9b.hsv.local:10.10.106.59 \
   -f dockerfile/Dockerfile.wireshark-ubi9-build \
   -t wireshark-ubi9:dev .
@@ -31,7 +31,7 @@ podman build \
 
 Leave `DISPLAY` unset on the compile image. Compiling does not open a window. `/src/scripts/compile-wireshark.sh` checks the GUI binary with `QT_QPA_PLATFORM=offscreen`, so that check does not need an X server. flex, c-ares, and speexdsp are found on the default pkg-config path.
 
-The runtime image sets `QT_X11_NO_MITSHM=1`. It still leaves `DISPLAY` unset: pass that from the host session and mount the X11 socket when you start the container. Capturing packets needs `NET_RAW` and `NET_ADMIN` on the container. The run command is in `docs/RHEL9-BUILD.md`. `docker compose up` stays on the compile image and does not need the runtime image.
+The runtime image sets `QT_X11_NO_MITSHM=1`. It still leaves `DISPLAY` unset: pass that from the host session and mount the X11 socket when you start the container. Capturing packets needs `NET_RAW` and `NET_ADMIN` on the container. The run command is in the runtime section below. `docker compose up` stays on the compile image and does not need the runtime image.
 
 ## GitLab CI
 
@@ -47,7 +47,7 @@ The image already contains the Wireshark tree, `/src/scripts`, and `/src/plugins
 docker run --rm wireshark-ubi9:dev /src/scripts/compile-wireshark.sh
 ```
 
-Use `podman` in place of `docker` when the image is in Podman's store. If the container is already running, use its name:
+If the container is already running, use its name:
 
 ```bash
 docker exec <container> /src/scripts/compile-wireshark.sh
@@ -69,6 +69,63 @@ A plugin that calls `find_package(Wireshark)` is built after the install. Upstre
 ```bash
 docker exec <container> /src/scripts/build-sandbox-plugins.sh
 ```
+
+## Package the RPM and run the runtime image
+
+A finished compile does not write the RPM and does not build the runtime image. The runtime file is `dockerfile/Dockerfile.wireshark-ubi9-runtime`.
+
+`--package` builds, installs into `src/build/rhel9/staging`, and writes the RPM:
+
+```bash
+./src/scripts/compile-wireshark.sh --rhel 9 --package
+```
+
+Inside the compile container:
+
+```bash
+docker exec <container> /src/scripts/compile-wireshark.sh --rhel 9 --package
+```
+
+The RPM is `src/artifacts/rpms/rhel9/wireshark-4.6.9-1.ppv1.0.5.el9.x86_64.rpm`. The architecture follows the build machine.
+
+From the checkout, build the runtime image. It installs the RPM from that directory. The local tag is `wireshark-ppv:candidate`, separate from the compile image `wireshark-ubi9:dev`. `dnf` still needs the Satellite host mapping.
+
+```bash
+set -a
+. ./versions/RHEL9.env
+set +a
+docker build \
+  --add-host satellite9b.hsv.local:10.10.106.59 \
+  -f dockerfile/Dockerfile.wireshark-ubi9-runtime \
+  --build-arg WIRESHARK_VERSION="$WIRESHARK_VERSION" \
+  --build-arg PACKET_PENGUIN_VERSION="$PACKET_PENGUIN_VERSION" \
+  --build-arg RHEL_VERSION="$RHEL_VERSION" \
+  --build-arg BUILD_TYPE=dev \
+  --build-arg RPM_DIR="src/artifacts/rpms/rhel${RHEL_VERSION}" \
+  -t wireshark-ppv:candidate .
+```
+
+A check with no display overrides the GUI command:
+
+```bash
+docker run --rm -e QT_QPA_PLATFORM=offscreen wireshark-ppv:candidate /usr/local/bin/tshark -v
+docker run --rm -e QT_QPA_PLATFORM=offscreen wireshark-ppv:candidate /usr/local/bin/wireshark --version
+```
+
+Open the window from a graphical session. `DISPLAY` comes from that session. Packet capture uses `NET_RAW` and `NET_ADMIN`.
+
+```bash
+docker run --rm \
+  -e DISPLAY \
+  -e XAUTHORITY=/tmp/.Xauthority \
+  -v /tmp/.X11-unix:/tmp/.X11-unix \
+  -v "${XAUTHORITY:-$HOME/.Xauthority}:/tmp/.Xauthority:ro" \
+  --network host \
+  --cap-add NET_RAW --cap-add NET_ADMIN \
+  wireshark-ppv:candidate
+```
+
+GitLab runs the same steps after compile and test. The rpm job passes `--package`, the docker job builds this Dockerfile, and publish pushes the image to Artifactory.
 
 ## Compose
 

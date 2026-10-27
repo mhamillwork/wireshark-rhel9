@@ -73,7 +73,7 @@ rpm -qpl src/artifacts/rpms/rhel9/*.rpm
 
 `rpmlint` runs when it is installed. Packaging errors fail the script. Two results are filtered in `src/rpmbuild/rpmlintrc`: `dir-or-file-in-usr-local`, because the package lives under `/usr/local` beside the distribution Wireshark, and `no-signature`, because signing uses a key that is not in this repository. `invalid-license` can appear as a warning: the spec uses the SPDX id `GPL-2.0-or-later`, which older rpmlint license lists do not know. Other rpmlint errors still fail the build. On a host without `rpmlint`, the script records that the metadata checks still ran.
 
-`./src/scripts/test-rpm.sh` repeats the metadata checks. If podman or docker can see the local bootstrap image, it also installs and removes the RPM in a container. Otherwise it says that installation test was not run.
+`./src/scripts/test-rpm.sh` repeats the metadata checks. If docker can see the local bootstrap image, it also installs and removes the RPM in a container. Otherwise it says that installation test was not run.
 
 ## Images
 
@@ -149,7 +149,7 @@ A release is published only when all of these are true:
 
 Setting `BUILD_TYPE=release` on an ordinary branch does not publish. If the release tag already exists in the registry, the push stops. Prefer an immutable tag policy in Artifactory as well.
 
-The runner uses the compile image already loaded as `wireshark-ubi9:dev` (`pull_policy: if-not-present`). Rebuild that image after this change so it contains `rpm-build` and `versions/`. The rpm job compiles again: the compile job keeps `run/` and the logs, and the package step needs a fresh CMake build in that job. Publish uses `docker` or `podman` from the job, so the runner has to provide one of those commands (a shell runner, or a client plus the engine socket). The registry must be reachable from the runner, and the runner must trust the Artifactory certificate. Do not disable TLS verification.
+The runner uses the compile image already loaded as `wireshark-ubi9:dev` (`pull_policy: if-not-present`). Rebuild that image after this change so it contains `rpm-build` and `versions/`. The rpm job compiles again: the compile job keeps `run/` and the logs, and the package step needs a fresh CMake build in that job. Publish uses `docker` from the job, so the runner has to provide that command (a shell runner, or a client plus the engine socket). The registry must be reachable from the runner, and the runner must trust the Artifactory certificate. Do not disable TLS verification.
 
 Merge request pipelines run the checks and do not publish. A branch pipeline publishes the development tags. Release publishing is a separate manual pipeline on the protected Git tag, and a resource group keeps two publishes from pushing at the same time.
 
@@ -180,5 +180,5 @@ Edit `versions/RHEL9.env` and rename `src/wireshark-$WIRESHARK_VERSION` so the d
 - `ninja: error: dependency cycle: .../plugin.c -> .../plugin.c`: `register_plugin_files` was given `plugin.c`, which is the file Wireshark 4.6.9 generates. Pass `${DISSECTOR_SRC}` to that command, and keep `plugin.c` only in `PLUGIN_FILES`. Clean the CMake build directory and compile again.
 - `libwireshark.so.19: cannot open shared object file`: the build-tree binary's RPATH is `$ORIGIN/../lib64` while the libraries are in `run/`. From a checkout whose scripts live in `/src/scripts`, the binary is `/src/build/rhel9/wireshark/run/tshark`. Re-run the compile script so it recreates `src/build/rhel9/wireshark/lib64`, or link the libraries yourself: `mkdir -p /src/build/rhel9/wireshark/lib64` and `ln -sfn "../run/<library>"` for each `lib*.so*` in `run/`. The version check also accepts `LD_LIBRARY_PATH` pointed at `run/`.
 - `rpmbuild is not installed`: rebuild the compile image; `rpm-build` is installed by `dockerfile/Dockerfile.wireshark-ubi9-build`.
-- `podman or docker is required`: the docker and publish jobs need a container engine on the runner.
+- `docker is required`: the docker and publish jobs need Docker on the runner.
 - Registry login failed: check the masked variables, DNS for `artifactory.tahaa.local`, and the CA trust. Do not pass `--tls-verify=false`.

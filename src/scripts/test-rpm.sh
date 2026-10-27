@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Inspect the RPM produced by build-rpm.sh. Installation in a container is
-# attempted only when docker or podman and a local base image are available.
+# attempted only when docker and a local base image are available.
 set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -33,12 +33,10 @@ rpm -qp --queryformat '%{NAME} %{VERSION} %{RELEASE} %{ARCH}\n' "$rpm_file" \
 rpm -qpl "$rpm_file" | grep -q '/usr/local/bin/tshark' || build_fail "tshark is not in the RPM"
 echo "RPM metadata checks passed"
 
-if command -v podman >/dev/null 2>&1; then
-  engine=podman
-elif command -v docker >/dev/null 2>&1; then
+if command -v docker >/dev/null 2>&1; then
   engine=docker
 else
-  echo "Container installation test was not run: docker and podman are absent"
+  echo "Container installation test was not run: docker is absent"
   exit 0
 fi
 

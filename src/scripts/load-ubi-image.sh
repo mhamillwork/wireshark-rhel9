@@ -3,9 +3,8 @@
 # both stages on artifactory.tahaa.local/tahaa-image-local/ubi9-tahaa-bootstrap:9.8
 # and does not use this archive.
 #
-# The archive is a docker/podman save of registry.access.redhat.com/ubi9/ubi:9.8.
-# Podman is preferred so a following "podman build" sees this image and the
-# host Satellite entitlement. Docker is used when Podman is not available.
+# The archive is a docker save of registry.access.redhat.com/ubi9/ubi:9.8.
+# Docker loads it so a following "docker build" sees this image.
 #
 #   ./src/scripts/load-ubi-image.sh
 set -euo pipefail
@@ -32,12 +31,8 @@ if [ "$actual" != "$EXPECTED_ARCHIVE_SHA256" ]; then
   exit 1
 fi
 
-if podman info >/dev/null 2>&1; then
-  container_cmd() { podman "$@"; }
-elif docker info >/dev/null 2>&1; then
+if docker info >/dev/null 2>&1; then
   container_cmd() { docker "$@"; }
-elif sudo podman info >/dev/null 2>&1; then
-  container_cmd() { sudo podman "$@"; }
 else
   container_cmd() { sudo docker "$@"; }
 fi
