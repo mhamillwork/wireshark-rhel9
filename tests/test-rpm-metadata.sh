@@ -28,7 +28,7 @@ export ARTIFACT_DIR="$tmp/rpms"
 export LOG_DIR="$tmp/logs"
 export REQUIRE_PLUGINS=1
 
-"$root/scripts/build-rpm.sh"
+"$root/src/scripts/build-rpm.sh"
 
 mapfile -t rpms < <(find "$ARTIFACT_DIR" -type f -name 'wireshark-ppv-4.6.9-1.ppv1.0.5.el9.*.rpm' | sort)
 [ "${#rpms[@]}" -eq 1 ] || {
@@ -37,5 +37,5 @@ mapfile -t rpms < <(find "$ARTIFACT_DIR" -type f -name 'wireshark-ppv-4.6.9-1.pp
   exit 1
 }
 
-"$root/scripts/test-rpm.sh"
+"$root/src/scripts/test-rpm.sh"
 echo "RPM metadata test passed: $(basename "${rpms[0]}")"

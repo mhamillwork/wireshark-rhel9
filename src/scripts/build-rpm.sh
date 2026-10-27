@@ -95,8 +95,9 @@ fi
 
 if command -v rpmlint >/dev/null 2>&1; then
   lint_args=()
-  if [ -f "$root/src/rpmbuild/rpmlintrc" ]; then
-    lint_args=(-r "$root/src/rpmbuild/rpmlintrc")
+  lint_rc="$(cd "$(dirname "$spec_in")/../.." && pwd)/rpmlintrc"
+  if [ -f "$lint_rc" ]; then
+    lint_args=(-r "$lint_rc")
   fi
   rpmlint "${lint_args[@]}" "$spec" "$rpm_file" | tee "$LOG_DIR/rpmlint.txt" || build_fail "rpmlint reported an error"
 else

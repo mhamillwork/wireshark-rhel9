@@ -5,8 +5,8 @@
 set -Eeuo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
-# shellcheck source=../scripts/lib/build-config.sh
-source "$root/scripts/lib/build-config.sh"
+# shellcheck source=../src/scripts/lib/build-config.sh
+source "$root/src/scripts/lib/build-config.sh"
 
 fail() { echo "FAIL: $*" >&2; exit 1; }
 
@@ -20,12 +20,12 @@ RHEL_VERSION=9
 RPM_PACKAGE_RELEASE=1
 SUPPORTED=1
 EOF
-if VERSIONS_FILE="$tmp/bad.env" bash -c 'source "'"$root"'/scripts/lib/build-config.sh"; build_load_versions 9'; then
+if VERSIONS_FILE="$tmp/bad.env" bash -c 'source "'"$root"'/src/scripts/lib/build-config.sh"; build_load_versions 9'; then
   fail "malformed version was accepted"
 fi
 
 set +e
-missing_out="$(VERSIONS_FILE="$tmp/missing.env" bash -c 'source "'"$root"'/scripts/lib/build-config.sh"; build_load_versions 9' 2>&1)"
+missing_out="$(VERSIONS_FILE="$tmp/missing.env" bash -c 'source "'"$root"'/src/scripts/lib/build-config.sh"; build_load_versions 9' 2>&1)"
 missing_status=$?
 set -e
 [ "$missing_status" -ne 0 ] || fail "missing version file was accepted"
@@ -36,7 +36,7 @@ fi
 
 repo="$tmp/repo"
 mkdir -p "$repo/versions" "$repo/scripts/lib" "$repo/wireshark-1.2.3"
-cp "$root/scripts/lib/build-config.sh" "$repo/scripts/lib/"
+cp "$root/src/scripts/lib/build-config.sh" "$repo/scripts/lib/"
 cat > "$repo/versions/RHEL9.env" <<'EOF'
 WIRESHARK_VERSION=1.2.3
 PACKET_PENGUIN_VERSION=9.9.9
@@ -64,6 +64,7 @@ printf 'cmake_minimum_required(VERSION 3.16)\n' > "$repo/wireshark-1.2.3/CMakeLi
 rm -rf "$repo/wireshark-1.2.3"
 if (
   cd "$repo"
+  # shellcheck source=/dev/null
   source scripts/lib/build-config.sh
   build_load_versions 9
   build_resolve_source_dir
@@ -71,13 +72,17 @@ if (
   fail "missing source directory was accepted"
 fi
 
-"$root/scripts/compile-wireshark.sh" --help >/dev/null
-"$root/scripts/compile-wireshark.sh" --rhel 9 --check >"$tmp/check.out"
-grep -q 'Wireshark version: 4.6.9' "$tmp/check.out" || fail "check did not print 4.6.9"
-grep -q 'Packet Penguin version: 1.0.5' "$tmp/check.out" || fail "check did not print 1.0.5"
-grep -q 'RHEL version: 9' "$tmp/check.out" || fail "check did not print RHEL 9"
+# shellcheck disable=SC1091
+source "$root/versions/RHEL9.env"
+"$root/src/scripts/compile-wireshark.sh" --help >/dev/null
+"$root/src/scripts/compile-wireshark.sh" --rhel 9 --check >"$tmp/check.out"
+grep -q "Wireshark version: ${WIRESHARK_VERSION}" "$tmp/check.out" || fail "check did not print the Wireshark version"
+grep -q "Packet Penguin version: ${PACKET_PENGUIN_VERSION}" "$tmp/check.out" || fail "check did not print the Packet Penguin version"
+grep -q "RHEL version: ${RHEL_VERSION}" "$tmp/check.out" || fail "check did not print the RHEL version"
+grep -q "wireshark-${WIRESHARK_VERSION}" "$tmp/check.out" || fail "check did not resolve wireshark-\$WIRESHARK_VERSION"
+grep -q "src/build/rhel${RHEL_VERSION}/wireshark" "$tmp/check.out" || fail "check did not use src/build"
 
-if "$root/scripts/compile-wireshark.sh" --rhel 8 --check >"$tmp/rhel8.out" 2>&1; then
+if "$root/src/scripts/compile-wireshark.sh" --rhel 8 --check >"$tmp/rhel8.out" 2>&1; then
   fail "RHEL 8 was accepted"
 fi
 grep -q 'not supported' "$tmp/rhel8.out" || fail "RHEL 8 failure did not explain itself"
@@ -85,7 +90,7 @@ grep -q 'not supported' "$tmp/rhel8.out" || fail "RHEL 8 failure did not explain
 (
   export BUILD_ROOT="$tmp/publish-build"
   set +e
-  release_out="$(ARTIFACTORY_USERNAME=user ARTIFACTORY_PASSWORD=secret BUILD_TYPE=release "$root/scripts/publish-image.sh" 2>&1)"
+  release_out="$(ARTIFACTORY_USERNAME=user ARTIFACTORY_PASSWORD=secret BUILD_TYPE=release "$root/src/scripts/publish-image.sh" 2>&1)"
   release_status=$?
   set -e
   [ "$release_status" -ne 0 ] || fail "unprotected release publish was accepted"
@@ -96,7 +101,7 @@ grep -q 'not supported' "$tmp/rhel8.out" || fail "RHEL 8 failure did not explain
 )
 
 set +e
-bad_type="$(BUILD_ROOT="$tmp/publish-build" BUILD_TYPE=nightly "$root/scripts/publish-image.sh" 2>&1)"
+bad_type="$(BUILD_ROOT="$tmp/publish-build" BUILD_TYPE=nightly "$root/src/scripts/publish-image.sh" 2>&1)"
 bad_status=$?
 set -e
 [ "$bad_status" -ne 0 ] || fail "BUILD_TYPE=nightly was accepted"

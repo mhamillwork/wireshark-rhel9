@@ -22,6 +22,26 @@ build_repo_root() {
   cd "$(build_scripts_dir)/.." && pwd
 }
 
+# Directory that contains .gitlab-ci.yml. Scripts live in src/scripts, so the
+# checkout root is the parent of the src directory. Compose mounts that
+# checkout at /workspace.
+build_checkout_root() {
+  local dir
+  dir="$(build_scripts_dir)"
+  while [ "$dir" != "/" ]; do
+    if [ -f "$dir/.gitlab-ci.yml" ]; then
+      printf '%s\n' "$dir"
+      return 0
+    fi
+    dir="$(dirname "$dir")"
+  done
+  if [ -f /workspace/.gitlab-ci.yml ]; then
+    printf '%s\n' /workspace
+    return 0
+  fi
+  build_repo_root
+}
+
 # Walk upward from the script directory for versions/RHEL<n>.env.
 build_find_versions_file() {
   local rhel="$1"

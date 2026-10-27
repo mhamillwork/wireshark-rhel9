@@ -15,9 +15,11 @@ RPM_PACKAGE_RELEASE=1
 
 ## Where sources are found
 
-The compile script looks for a directory named `wireshark-$WIRESHARK_VERSION` under `src/` or the repository root, then for an unversioned `wireshark/` directory whose `CMakeLists.txt` version matches. Packet Penguin plugins are CMake projects under `src/plugins/` or `plugins/`. A plugin may put the same version in a `PACKET_PENGUIN_VERSION` file; if that file exists and differs, the build stops.
+Wireshark is `src/wireshark-$WIRESHARK_VERSION`. The directory suffix is the `WIRESHARK_VERSION` value from `versions/RHEL9.env`. Packet Penguin plugins are CMake projects under `src/plugins/`. A plugin may put the same version in a `PACKET_PENGUIN_VERSION` file; if that file exists and differs, the build stops.
 
-This checkout stores upstream Wireshark in `wireshark/`. A GitLab checkout that uses `src/wireshark-$WIRESHARK_VERSION` and `src/plugins` is also accepted. There is no Packet Penguin source in this GitHub tree, so packaging fails here until those plugins are added.
+There is no Packet Penguin source in this checkout, so packaging fails here until those plugins are added.
+
+The tests stay in `tests/` at the checkout root. The compile image copies `src/` and does not include that directory. GitLab runs `./src/scripts/validate-repo.sh`, which calls the tests from the checkout.
 
 A directory under the plugin root that has its own `CMakeLists.txt` is built out of tree after Wireshark is installed. C sources with no `CMakeLists.txt` are the in-tree dissectors: link them into the Wireshark tree and they are compiled with Wireshark, then shipped inside `libwireshark`. `--package` still requires one of those two layouts.
 
@@ -26,12 +28,12 @@ A directory under the plugin root that has its own `CMakeLists.txt` is built out
 The script can be started from any directory.
 
 ```bash
-./scripts/compile-wireshark.sh --help
-./scripts/compile-wireshark.sh --rhel 9 --check
-./scripts/compile-wireshark.sh --rhel 9 --clean --build --test
+./src/scripts/compile-wireshark.sh --help
+./src/scripts/compile-wireshark.sh --rhel 9 --check
+./src/scripts/compile-wireshark.sh --rhel 9 --clean --build --test
 ```
 
-With no mode flags it builds and runs the version checks. The out-of-source build is `build/rhel9/wireshark/`. `tshark` is `build/rhel9/wireshark/run/tshark`.
+With no mode flags it builds and runs the version checks. The out-of-source build is `src/build/rhel9/wireshark/`. `tshark` is `src/build/rhel9/wireshark/run/tshark`. Inside the image, that same directory is `/src/build/rhel9/wireshark/run/tshark`.
 
 RHEL 9 has Qt 5.15, so the script passes `-DUSE_qt6=OFF`. Ninja links with the install RPATH (`$ORIGIN/../lib64`). The script symlinks the libraries from `run/` into that directory. The version check also sets `LD_LIBRARY_PATH` to `run/`.
 
@@ -42,26 +44,26 @@ Build tools are gcc, cmake, and ninja, plus the libraries installed by the root 
 The package name is `wireshark-ppv`. It installs under `/usr/local` and does not replace the RHEL `wireshark` package. `/usr/local/bin` is normally ahead of `/usr/bin`.
 
 ```bash
-./scripts/compile-wireshark.sh --rhel 9 --package
+./src/scripts/compile-wireshark.sh --rhel 9 --package
 ```
 
 Output:
 
 ```text
-artifacts/rpms/rhel9/wireshark-ppv-4.6.9-1.ppv1.0.5.el9.x86_64.rpm
+src/artifacts/rpms/rhel9/wireshark-ppv-4.6.9-1.ppv1.0.5.el9.x86_64.rpm
 ```
 
 The architecture follows the build machine. Inspect it with:
 
 ```bash
-rpm -qpi artifacts/rpms/rhel9/*.rpm
-rpm -qp --requires artifacts/rpms/rhel9/*.rpm
-rpm -qpl artifacts/rpms/rhel9/*.rpm
+rpm -qpi src/artifacts/rpms/rhel9/*.rpm
+rpm -qp --requires src/artifacts/rpms/rhel9/*.rpm
+rpm -qpl src/artifacts/rpms/rhel9/*.rpm
 ```
 
 `rpmlint` runs when it is installed. Packaging errors fail the script. Two results are filtered in `src/rpmbuild/rpmlintrc`: `dir-or-file-in-usr-local`, because the package lives under `/usr/local` beside the distribution Wireshark, and `no-signature`, because signing uses a key that is not in this repository. `invalid-license` can appear as a warning: the spec uses the SPDX id `GPL-2.0-or-later`, which older rpmlint license lists do not know. Other rpmlint errors still fail the build. On a host without `rpmlint`, the script records that the metadata checks still ran.
 
-`./scripts/test-rpm.sh` repeats the metadata checks. If podman or docker can see a local UBI 9 image, it also installs and removes the RPM in a container. Otherwise it says that installation test was not run.
+`./src/scripts/test-rpm.sh` repeats the metadata checks. If podman or docker can see a local UBI 9 image, it also installs and removes the RPM in a container. Otherwise it says that installation test was not run.
 
 ## Runtime image
 
@@ -76,6 +78,7 @@ docker build -f dockerfile/RHEL-9/Dockerfile \
   --build-arg PACKET_PENGUIN_VERSION="$PACKET_PENGUIN_VERSION" \
   --build-arg RHEL_VERSION="$RHEL_VERSION" \
   --build-arg BUILD_TYPE=dev \
+  --build-arg RPM_DIR="src/artifacts/rpms/rhel${RHEL_VERSION}" \
   -t wireshark-ppv:candidate .
 docker run --rm wireshark-ppv:candidate
 ```
@@ -129,14 +132,14 @@ Mask both registry variables. Protect them when development pipelines run on a p
 
 ## Changing versions
 
-Edit `versions/RHEL9.env`, commit, and let the development pipeline run. The source directory, RPM filename, and image tags follow that file. Put the new Wireshark tree at `src/wireshark-<version>` or replace `wireshark/` with a tree of that version.
+Edit `versions/RHEL9.env` and rename `src/wireshark-$WIRESHARK_VERSION` so the directory suffix matches the new `WIRESHARK_VERSION`. Commit and let the development pipeline run. The RPM filename and image tags follow that file.
 
 ## Troubleshooting
 
 - `version configuration not found`: `versions/RHEL9.env` is not beside the scripts, at `/workspace/versions` (the Compose checkout mount), or at `/opt/wireshark-build/versions` in the compile image.
 - `Wireshark source directory not found`: the tree name or the `CMakeLists.txt` version does not match `WIRESHARK_VERSION`.
 - `Packet Penguin plugin directory is missing`: `--package` requires a CMake plugin under `src/plugins` or `plugins`.
-- `libwireshark.so.19: cannot open shared object file`: the build-tree binary's RPATH is `$ORIGIN/../lib64` while the libraries are in `run/`. From a checkout whose scripts live in `/src/scripts`, the binary is `/src/build/rhel9/wireshark/run/tshark`. Re-run the compile script so it recreates `build/rhel9/wireshark/lib64`, or link the libraries yourself: `mkdir -p /src/build/rhel9/wireshark/lib64` and `ln -sfn "../run/<library>"` for each `lib*.so*` in `run/`. The version check also accepts `LD_LIBRARY_PATH` pointed at `run/`.
+- `libwireshark.so.19: cannot open shared object file`: the build-tree binary's RPATH is `$ORIGIN/../lib64` while the libraries are in `run/`. From a checkout whose scripts live in `/src/scripts`, the binary is `/src/build/rhel9/wireshark/run/tshark`. Re-run the compile script so it recreates `src/build/rhel9/wireshark/lib64`, or link the libraries yourself: `mkdir -p /src/build/rhel9/wireshark/lib64` and `ln -sfn "../run/<library>"` for each `lib*.so*` in `run/`. The version check also accepts `LD_LIBRARY_PATH` pointed at `run/`.
 - `rpmbuild is not installed`: rebuild the compile image; `rpm-build` is in the root `Dockerfile`.
 - `podman or docker is required`: the docker and publish jobs need a container engine on the runner.
 - Registry login failed: check the masked variables, DNS for `artifactory.tahaa.local`, and the CA trust. Do not pass `--tls-verify=false`.

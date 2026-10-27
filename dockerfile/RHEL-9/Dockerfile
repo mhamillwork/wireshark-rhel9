@@ -1,5 +1,5 @@
 # Runtime image. The compile image remains the repository-root Dockerfile.
-# Build this only after scripts/build-rpm.sh has written the RPM.
+# Build this only after src/scripts/build-rpm.sh has written the RPM.
 #
 #   docker build -f dockerfile/RHEL-9/Dockerfile -t wireshark-ppv:candidate .
 #
@@ -16,7 +16,7 @@ ARG GIT_COMMIT=unknown
 ARG BUILD_DATE=unknown
 ARG PIPELINE_ID=local
 ARG BUILD_TYPE=dev
-ARG RPM_DIR=artifacts/rpms/rhel9
+ARG RPM_DIR
 
 RUN test -n "$WIRESHARK_VERSION" \
     && test -n "$PACKET_PENGUIN_VERSION" \

@@ -39,50 +39,50 @@ default:
 validate:
   stage: validate
   script:
-    - ./scripts/validate-repo.sh
+    - ./src/scripts/validate-repo.sh
     - test "$BUILD_TYPE" = dev -o "$BUILD_TYPE" = release
 
 compile:
   stage: compile
   needs: ["validate"]
   script:
-    - ./scripts/compile-wireshark.sh --rhel 9 --build
+    - ./src/scripts/compile-wireshark.sh --rhel 9 --build
   artifacts:
     paths:
-      - build/rhel9/wireshark/run/
-      - build/rhel9/logs/
+      - src/build/rhel9/wireshark/run/
+      - src/build/rhel9/logs/
     expire_in: 7 days
 
 test-compile:
   stage: test
   needs: ["compile"]
   script:
-    - ./scripts/compile-wireshark.sh --rhel 9 --test
+    - ./src/scripts/compile-wireshark.sh --rhel 9 --test
   artifacts:
     paths:
-      - build/rhel9/logs/
+      - src/build/rhel9/logs/
     expire_in: 7 days
 
 rpm:
   stage: rpm
   needs: ["test-compile"]
   script:
-    - ./scripts/compile-wireshark.sh --rhel 9 --package
+    - ./src/scripts/compile-wireshark.sh --rhel 9 --package
   artifacts:
     paths:
-      - artifacts/rpms/rhel9/
-      - build/rhel9/logs/
-      - build/rhel9/staging/
+      - src/artifacts/rpms/rhel9/
+      - src/build/rhel9/logs/
+      - src/build/rhel9/staging/
     expire_in: 14 days
 
 package-test:
   stage: package-test
   needs: ["rpm"]
   script:
-    - ./scripts/test-rpm.sh
+    - ./src/scripts/test-rpm.sh
   artifacts:
     paths:
-      - build/rhel9/logs/package-test.txt
+      - src/build/rhel9/logs/package-test.txt
     expire_in: 14 days
 
 docker-image:
@@ -92,8 +92,8 @@ docker-image:
     - job: rpm
       artifacts: true
   script:
-    - ./scripts/write-build-metadata.sh
-    - test -n "$(find artifacts/rpms/rhel9 -name '*.rpm' -print -quit)"
+    - ./src/scripts/write-build-metadata.sh
+    - test -n "$(find src/artifacts/rpms/rhel9 -name '*.rpm' -print -quit)"
     - |
       set -euo pipefail
       if command -v podman >/dev/null 2>&1; then engine=podman
@@ -112,14 +112,15 @@ docker-image:
         --build-arg "BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
         --build-arg "PIPELINE_ID=${CI_PIPELINE_ID:-local}" \
         --build-arg "BUILD_TYPE=${BUILD_TYPE}" \
+        --build-arg "RPM_DIR=src/artifacts/rpms/rhel${RHEL_VERSION}" \
         -t "${LOCAL_IMAGE}" .
       "$engine" run --rm "${LOCAL_IMAGE}"
-      mkdir -p artifacts
-      "$engine" save -o artifacts/wireshark-image.tar "${LOCAL_IMAGE}"
+      mkdir -p src/artifacts
+      "$engine" save -o src/artifacts/wireshark-image.tar "${LOCAL_IMAGE}"
   artifacts:
     paths:
-      - artifacts/build-metadata.json
-      - artifacts/wireshark-image.tar
+      - src/artifacts/build-metadata.json
+      - src/artifacts/wireshark-image.tar
     expire_in: 7 days
 
 publish:
@@ -139,10 +140,10 @@ publish:
       elif command -v docker >/dev/null 2>&1; then engine=docker
       else echo "podman or docker is required to publish" >&2; exit 1
       fi
-      "$engine" load -i artifacts/wireshark-image.tar
-    - ./scripts/publish-image.sh
-    - ./scripts/write-build-metadata.sh
+      "$engine" load -i src/artifacts/wireshark-image.tar
+    - ./src/scripts/publish-image.sh
+    - ./src/scripts/write-build-metadata.sh
   artifacts:
     paths:
-      - artifacts/build-metadata.json
+      - src/artifacts/build-metadata.json
     expire_in: 30 days

@@ -1,6 +1,6 @@
 # wireshark-rhel9
 
-Wireshark and a Red Hat UBI 9 image that can compile it. Versions are in `versions/RHEL9.env` (Wireshark 4.6.9, Packet Penguin 1.0.5, RHEL 9). The compile script accepts `src/wireshark-$WIRESHARK_VERSION` or a `wireshark/` tree of that version, and plugins under `src/plugins`. See `docs/RHEL9-BUILD.md` for the RPM, the runtime image, and the GitLab pipeline. The image build copies `src/` to `/src`.
+Wireshark and a Red Hat UBI 9 image that can compile it. Versions are in `versions/RHEL9.env` (Wireshark 4.6.9, Packet Penguin 1.0.5, RHEL 9). Wireshark is `src/wireshark-$WIRESHARK_VERSION`, with `$WIRESHARK_VERSION` taken from that file. Plugins live under `src/plugins`. Scripts live under `src/scripts`. See `docs/RHEL9-BUILD.md` for the RPM, the runtime image, and the GitLab pipeline. The image build copies `src/` to `/src`.
 
 The image installs its RPMs from UBI 9.8 and from the RHEL 9 repositories on Satellite. UBI supplies the compiler and many protocol libraries. BaseOS, AppStream, and CodeReady Builder supply the rest, including flex, c-ares, speexdsp, and the Qt 5.15 GUI. RHEL 9 does not ship Qt 6. It also does not ship `libsmi-devel`, `nghttp3`, spandsp, iLBC, bcg729, or opencore-amr, so those features stay off.
 
@@ -9,7 +9,7 @@ The image installs its RPMs from UBI 9.8 and from the RHEL 9 repositories on Sat
 `images/ubi9-ubi-9.8.tar.gz` is an archive of `registry.access.redhat.com/ubi9/ubi:9.8` (`sha256:16e9e43d99e181463513cc84a514859b1abb9460f1c4d9e208da4b4e51cd5cc3`), the image named by the Dockerfile `FROM` line. Load it before the build so that line does not contact the registry:
 
 ```bash
-./scripts/load-ubi-image.sh
+./src/scripts/load-ubi-image.sh
 ```
 
 The load script checks the archive checksum and the image id. It loads into Podman when Podman is available, and into Docker otherwise.
@@ -39,7 +39,7 @@ To show the GUI on a host display, pass `DISPLAY` when you start the container a
 
 Push this repository to the isolated GitLab. Jobs use the image already loaded on the runner. The development pipeline validates, compiles, tests, builds the RPM, and publishes the development image. Override the image name with CI variable `WIRESHARK_IMAGE` if the loaded tag is different. Details are in `docs/RHEL9-BUILD.md`.
 
-The compile job saves `build/rhel9/wireshark/run/`. The build is also installed to `/usr/local`, which gives plugins `WiresharkConfig.cmake` and the libraries they link.
+The compile job saves `src/build/rhel9/wireshark/run/`. The build is also installed to `/usr/local`, which gives plugins `WiresharkConfig.cmake` and the libraries they link.
 
 ## Compile inside the container
 
@@ -55,7 +55,7 @@ Use `podman` in place of `docker` when the image is in Podman's store. If the co
 docker exec <container> /src/scripts/compile-wireshark.sh
 ```
 
-The script reads `versions/RHEL9.env`, configures the matching Wireshark tree, builds with Ninja, and installs to `/usr/local`. Binaries are at `build/rhel9/wireshark/run/tshark` and `build/rhel9/wireshark/run/wireshark`. Inside the image whose scripts live in `/src/scripts`, that path is `/src/build/rhel9/wireshark/run/`.
+The script reads `versions/RHEL9.env` and configures `src/wireshark-$WIRESHARK_VERSION`. It builds with Ninja and installs to `/usr/local`. From the checkout, `tshark` is `src/build/rhel9/wireshark/run/tshark`. Inside the image that path is `/src/build/rhel9/wireshark/run/tshark`.
 
 After that install, build each plugin under `/src/plugins`:
 

@@ -95,7 +95,7 @@ RUN printf 'assumeyes=1\nmax_parallel_downloads=10\ntsflags=nodocs\ninstall_weak
         rm -rf /var/cache/dnf' \
     && ln -s /run/secrets/rhsm /etc/rhsm-host
 
-# Version configuration used by scripts/compile-wireshark.sh.
+# Version configuration used by src/scripts/compile-wireshark.sh.
 COPY versions/ /opt/wireshark-build/versions/
 
 # src/wireshark-${WIRESHARK_VERSION} and src/plugins from the GitLab checkout.
