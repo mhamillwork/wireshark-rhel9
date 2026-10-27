@@ -58,6 +58,12 @@ macro(ADD_PLUGIN_LIBRARY _plugin _subfolder)
 	ADD_WIRESHARK_PLUGIN_LIBRARY(${_plugin} ${_subfolder})
 endmacro()
 
+# Wireshark 4.2 and earlier. Packet Penguin plugins still call this.
+# The current name is add_wireshark_plugin_library(<name> epan).
+macro(ADD_WIRESHARK_EPAN_PLUGIN_LIBRARY _plugin)
+	ADD_WIRESHARK_PLUGIN_LIBRARY(${_plugin} epan)
+endmacro()
+
 macro(ADD_STRATOSHARK_PLUGIN_LIBRARY _plugin _subfolder)
 	ADD_WIRESHARK_PLUGIN_LIBRARY(${_plugin} ${_subfolder})
 

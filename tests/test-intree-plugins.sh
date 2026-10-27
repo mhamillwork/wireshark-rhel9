@@ -80,4 +80,23 @@ export PACKET_PENGUIN_VERSION=1.0.5
 grep -q 'compiled inside the Wireshark build' "$tmp/sandbox.log" || fail "sandbox script tried to configure the in-tree plugin: $(cat "$tmp/sandbox.log")"
 [ ! -d "$tmp/plugin-build/foo" ] || fail "sandbox script created a standalone build directory"
 
+module_dir="$(find "$root/src" -type d -path '*/cmake/modules' -print -quit)"
+[ -f "$module_dir/WiresharkPlugin.cmake" ] || fail "WiresharkPlugin.cmake not found"
+compat="$tmp/compat"
+mkdir -p "$compat"
+printf 'int ospl_dummy(void) { return 0; }\n' > "$compat/empty.c"
+cat > "$compat/CMakeLists.txt" <<EOF
+cmake_minimum_required(VERSION 3.16)
+project(compat C)
+add_custom_target(plugins)
+set(PLUGIN_DIR "\${CMAKE_BINARY_DIR}/plugins")
+set(WS_LINK_FLAGS "")
+set(PLUGIN_FILES "\${CMAKE_SOURCE_DIR}/empty.c")
+set(CMAKE_MODULE_PATH "$module_dir")
+include(WiresharkPlugin)
+add_wireshark_epan_plugin_library(ospl)
+EOF
+cmake -S "$compat" -B "$tmp/compat-build" >"$tmp/compat.log" 2>&1 || fail "epan plugin command was not accepted: $(cat "$tmp/compat.log")"
+grep -q 'ospl' "$tmp/compat-build/CMakeFiles/TargetDirectories.txt" || fail "epan plugin library was not created: $(cat "$tmp/compat.log")"
+
 echo "in-tree plugin tests passed"
