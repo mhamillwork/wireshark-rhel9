@@ -40,9 +40,14 @@ mkdir -p "$topdir/BUILD" "$topdir/BUILDROOT" "$topdir/RPMS" "$topdir/SOURCES" "$
 
 filelist="$topdir/BUILD/filelist"
 : > "$filelist"
-while IFS= read -r path; do
-  printf '/%s\n' "$path" >> "$filelist"
-done < <(cd "$STAGING_DIR" && find usr/local \( -type f -o -type l \) | sort)
+# rpm splits an unquoted %files line on spaces. The stock profile
+# "No Reassembly" then shows up as the path Reassembly/preferences.
+while IFS= read -r -d '' path; do
+  case "$path" in
+    *\"*) build_fail "staged path contains a double quote: $path" ;;
+  esac
+  printf '"/%s"\n' "$path" >> "$filelist"
+done < <(cd "$STAGING_DIR" && find usr/local \( -type f -o -type l \) -print0 | sort -z)
 
 spec="$topdir/SPECS/wireshark-ppv.spec"
 sed \
