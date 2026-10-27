@@ -94,7 +94,7 @@ set(WS_LINK_FLAGS "")
 set(PLUGIN_FILES "\${CMAKE_SOURCE_DIR}/empty.c")
 set(CMAKE_MODULE_PATH "$module_dir")
 include(WiresharkPlugin)
-add_wireshark_epan_plugin_library(ospl)
+add_wireshark_plugin_library(ospl epan)
 EOF
 cmake -S "$compat" -B "$tmp/compat-build" >"$tmp/compat.log" 2>&1 || fail "epan plugin command was not accepted: $(cat "$tmp/compat.log")"
 grep -q 'ospl' "$tmp/compat-build/CMakeFiles/TargetDirectories.txt" || fail "epan plugin library was not created: $(cat "$tmp/compat.log")"
