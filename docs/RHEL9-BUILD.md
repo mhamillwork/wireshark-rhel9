@@ -49,7 +49,7 @@ Build tools are gcc, cmake, and ninja, plus the libraries installed by `dockerfi
 
 ## RPM
 
-The package name is `wireshark`. The release is `1.ppv1.0.5.el9`. It installs under `/usr/local`. `/usr/local/bin` is normally ahead of `/usr/bin`.
+The package name is `wireshark`. The release is `1.ppv1.0.5.el9`. It installs under `/usr/local`. `/usr/local/bin` is normally ahead of `/usr/bin`. Every file is owned by root. Programs are mode `0755` and other files are mode `0644`, so any user can run Wireshark. `dumpcap` also carries `cap_net_raw` and `cap_net_admin`, so a live capture does not require a root shell.
 
 `--package` fills `src/build/rhel9/staging` by installing the build with `DESTDIR`. `rpmbuild` copies that directory into the RPM. Satellite is the source of the RHEL packages `dnf` pulls while the images are built. This repository publishes the runtime image to Artifactory.
 

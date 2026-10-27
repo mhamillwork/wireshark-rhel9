@@ -40,6 +40,7 @@ fi
 
 grep -q 'BUILD_TYPE' .gitlab-ci.yml || build_fail ".gitlab-ci.yml has no BUILD_TYPE"
 grep -q '^Name:[[:space:]]*wireshark$' src/rpmbuild/RHEL-9/SPECS/wireshark.spec.in || build_fail "RPM spec template is missing the package name"
+grep -q 'cap_net_raw,cap_net_admin=ep' src/scripts/build-rpm.sh || build_fail "RPM file list does not grant dumpcap capture capabilities"
 grep -q 'artifactory.tahaa.local/tahaa-image-local/ubi9-tahaa-bootstrap:9.8' dockerfile/Dockerfile.wireshark-ubi9-build || build_fail "compile Dockerfile bootstrap image changed"
 grep -q 'artifactory.tahaa.local/tahaa-image-local/ubi9-tahaa-bootstrap:9.8' dockerfile/Dockerfile.wireshark-ubi9-runtime || build_fail "runtime Dockerfile bootstrap image changed"
 grep -q 'qt5-qtbase-gui' dockerfile/Dockerfile.wireshark-ubi9-runtime || build_fail "runtime image is missing the Qt xcb platform package"

@@ -21,8 +21,12 @@ plugin_dir="$stage/usr/local/lib64/wireshark/plugins/4.6/epan"
 profile_dir="$stage/usr/local/share/wireshark/profiles/No Reassembly"
 mkdir -p "$stage/usr/local/bin" "$plugin_dir" "$profile_dir"
 echo 'int main(void){return 0;}' | gcc -x c -o "$stage/usr/local/bin/tshark" -
+echo 'int main(void){return 0;}' | gcc -x c -o "$stage/usr/local/bin/dumpcap" -
 echo 'void plugin_register(void){}' | gcc -shared -fPIC -x c -o "$plugin_dir/packet-penguin.so" -
 printf 'reassembly off\n' > "$profile_dir/preferences"
+# Staged modes are owner-only. The RPM overrides them so any user can run it.
+chmod 700 "$stage/usr/local/bin/tshark" "$stage/usr/local/bin/dumpcap"
+chmod 600 "$profile_dir/preferences"
 
 export BUILD_ROOT="$tmp/build"
 export STAGING_DIR="$stage"
@@ -44,6 +48,33 @@ rpm -qpl "${rpms[0]}" | grep -F -q '/usr/local/share/wireshark/profiles/No Reass
   || {
     echo "RPM file list dropped the profile path that contains a space" >&2
     rpm -qpl "${rpms[0]}" >&2 || true
+    exit 1
+  }
+
+dump="$(rpm -qp --dump "${rpms[0]}")"
+printf '%s\n' "$dump" | grep -F '/usr/local/bin/tshark' | grep -q '0100755 root root' \
+  || {
+    echo "tshark is not mode 0755 root:root" >&2
+    printf '%s\n' "$dump" >&2
+    exit 1
+  }
+printf '%s\n' "$dump" | grep -F '/usr/local/bin/dumpcap' | grep -q '0100755 root root' \
+  || {
+    echo "dumpcap is not mode 0755 root:root" >&2
+    printf '%s\n' "$dump" >&2
+    exit 1
+  }
+printf '%s\n' "$dump" | grep -F '/usr/local/share/wireshark/profiles/No Reassembly/preferences' | grep -q '0100644 root root' \
+  || {
+    echo "preferences file is not mode 0644 root:root" >&2
+    printf '%s\n' "$dump" >&2
+    exit 1
+  }
+caps="$(rpm -qp --qf '[%{FILENAMES} %{FILECAPS}\n]' "${rpms[0]}")"
+printf '%s\n' "$caps" | grep -F '/usr/local/bin/dumpcap' | grep -E -q 'cap_net_(raw,cap_net_admin|admin,cap_net_raw)=ep' \
+  || {
+    echo "dumpcap is missing capture capabilities" >&2
+    printf '%s\n' "$caps" >&2
     exit 1
   }
 echo "RPM metadata test passed: $(basename "${rpms[0]}")"
