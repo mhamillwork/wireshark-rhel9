@@ -31,11 +31,8 @@ fi
 
 if ! docker_cmd image inspect "$IMAGE" >/dev/null 2>&1; then
   echo "Docker image $IMAGE is not loaded." >&2
-  echo "On a machine that can reach the network, build and export it:" >&2
-  echo "  docker build -t $IMAGE ." >&2
-  echo "  docker save $IMAGE | gzip > wireshark-ubi9.tar.gz" >&2
-  echo "On the isolated machine:" >&2
-  echo "  docker load -i wireshark-ubi9.tar.gz" >&2
+  echo "Build it on this network. Satellite is not in the image hosts file:" >&2
+  echo "  docker build --add-host satellite9b.hsv.local:10.10.106.59 -f dockerfile/Dockerfile.wireshark-ubi9-build -t $IMAGE ." >&2
   exit 1
 fi
 

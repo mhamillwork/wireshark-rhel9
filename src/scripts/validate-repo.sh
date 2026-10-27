@@ -46,6 +46,8 @@ grep -q 'qt5-qtbase-gui' dockerfile/Dockerfile.wireshark-ubi9-runtime || build_f
 grep -q 'QT_X11_NO_MITSHM=1' dockerfile/Dockerfile.wireshark-ubi9-runtime || build_fail "runtime image is missing QT_X11_NO_MITSHM"
 grep -q '/usr/local/bin/wireshark' dockerfile/Dockerfile.wireshark-ubi9-runtime || build_fail "runtime image command is not the Wireshark GUI"
 grep -q 'Dockerfile.wireshark-ubi9-runtime' .gitlab-ci.yml || build_fail "GitLab docker job does not build the runtime Dockerfile"
+grep -q -- '--add-host satellite9b.hsv.local:10.10.106.59' README.md || build_fail "README compile build is missing the Satellite host"
+grep -q -- '--add-host satellite9b.hsv.local:10.10.106.59' .gitlab-ci.yml || build_fail "GitLab runtime build is missing the Satellite host"
 grep -q 'QT_QPA_PLATFORM=offscreen' .gitlab-ci.yml || build_fail "GitLab docker job would start the GUI with no display"
 if grep -q 'AS runtime' dockerfile/Dockerfile.wireshark-ubi9-build; then
   build_fail "compile Dockerfile still contains the runtime stage"

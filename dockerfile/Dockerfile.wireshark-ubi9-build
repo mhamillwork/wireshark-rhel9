@@ -1,6 +1,7 @@
 # Compile image, tagged wireshark-ubi9:dev.
 #
-#   podman build -f dockerfile/Dockerfile.wireshark-ubi9-build -t wireshark-ubi9:dev .
+#   podman build --add-host satellite9b.hsv.local:10.10.106.59 \
+#     -f dockerfile/Dockerfile.wireshark-ubi9-build -t wireshark-ubi9:dev .
 #
 # The base is the TAHAA UBI 9.8 bootstrap. It already carries the
 # isolated-network certificates, yum repositories, and hosts file. The rhsm

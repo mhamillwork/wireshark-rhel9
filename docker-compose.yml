@@ -1,4 +1,4 @@
-# Manual compile session. The image is loaded locally (docker load / docker build);
+# Manual compile session. The image is built locally on this network;
 # Compose does not pull it from a registry.
 #
 # The workstation GitLab checkout is mounted at /src, so

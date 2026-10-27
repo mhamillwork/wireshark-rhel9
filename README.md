@@ -16,17 +16,15 @@ The load script checks the archive checksum and the image id. It loads into Podm
 
 ## Compile image
 
-Build where `artifactory.tahaa.local/tahaa-image-local/ubi9-tahaa-bootstrap:9.8` is already loaded or reachable. Podman on a Satellite-registered host mounts the host entitlement, which is how `dnf` reaches BaseOS, AppStream, and CodeReady Builder when the bootstrap still uses those repositories. Enable CodeReady Builder on the host (`codeready-builder-for-rhel-9-<arch>-rpms`); speexdsp, libpcap, Lua, and Ninja come from that repository. Use Podman for this build.
+Build on the isolated network, where `artifactory.tahaa.local/tahaa-image-local/ubi9-tahaa-bootstrap:9.8` is already loaded or reachable. The image stays in the local Podman store. Podman on a Satellite-registered host mounts the host entitlement, which is how `dnf` reaches BaseOS, AppStream, and CodeReady Builder when the bootstrap still uses those repositories. Enable CodeReady Builder on the host (`codeready-builder-for-rhel-9-<arch>-rpms`); speexdsp, libpcap, Lua, and Ninja come from that repository. Use Podman for this build.
+
+`satellite9b.hsv.local` is the Satellite server those repositories use. The build only pulls packages from it. The build container does not resolve that name, so pass it on the command line. `--add-host` is local to that build.
 
 ```bash
-podman build -f dockerfile/Dockerfile.wireshark-ubi9-build -t wireshark-ubi9:dev .
-podman save wireshark-ubi9:dev | gzip > wireshark-ubi9.tar.gz
-```
-
-Copy `wireshark-ubi9.tar.gz` and this repository to the isolated network, then:
-
-```bash
-docker load -i wireshark-ubi9.tar.gz
+podman build \
+  --add-host satellite9b.hsv.local:10.10.106.59 \
+  -f dockerfile/Dockerfile.wireshark-ubi9-build \
+  -t wireshark-ubi9:dev .
 ```
 
 ## Environment
