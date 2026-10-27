@@ -99,8 +99,8 @@ EOF
 cmake -S "$compat" -B "$tmp/compat-build" >"$tmp/compat.log" 2>&1 || fail "epan plugin command was not accepted: $(cat "$tmp/compat.log")"
 grep -q 'ospl' "$tmp/compat-build/CMakeFiles/TargetDirectories.txt" || fail "epan plugin library was not created: $(cat "$tmp/compat.log")"
 
-# register_plugin_files(plugin.c plugin ${PLUGIN_FILES}) lists plugin.c as an
-# input. That is the file the command writes, so Ninja reports a self-cycle.
+# Wireshark 4.6 passes the dissector sources to register_plugin_files.
+# plugin.c is the generated output and stays in PLUGIN_FILES only.
 cycle="$tmp/cycle"
 mkdir -p "$cycle/real/c/ospl" "$cycle/src/packet-penguin-plugins" "$cycle/src/tools"
 cp "$root/src/wireshark-"*/tools/make-plugin-reg.py "$cycle/src/tools/make-plugin-reg.py"
@@ -110,7 +110,7 @@ cat > "$cycle/real/c/ospl/CMakeLists.txt" <<'EOF'
 cmake_minimum_required(VERSION 3.16)
 set(DISSECTOR_SRC packet-ospl.c)
 set(PLUGIN_FILES plugin.c ${DISSECTOR_SRC})
-register_plugin_files(plugin.c plugin ${PLUGIN_FILES})
+register_plugin_files(plugin.c plugin ${DISSECTOR_SRC})
 add_custom_target(gen ALL DEPENDS plugin.c)
 EOF
 ln -sfn "$cycle/real/c/ospl" "$cycle/src/packet-penguin-plugins/c_ospl"
