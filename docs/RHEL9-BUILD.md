@@ -35,6 +35,14 @@ The script can be started from any directory.
 
 With no mode flags it builds and runs the version checks. The out-of-source build is `src/build/rhel9/wireshark/`. `tshark` is `src/build/rhel9/wireshark/run/tshark`. Inside the image, that same directory is `/src/build/rhel9/wireshark/run/tshark`.
 
+`--clean` deletes that CMake build directory, including `CMakeCache.txt`. It leaves `src/build/rhel9/staging`, `src/build/rhel9/logs`, and anything already installed under `/usr/local`. Clean and compile again with:
+
+```bash
+./src/scripts/compile-wireshark.sh --rhel 9 --clean --build
+```
+
+Inside the compile container the same command is `/src/scripts/compile-wireshark.sh --rhel 9 --clean --build`.
+
 RHEL 9 has Qt 5.15, so the script passes `-DUSE_qt6=OFF`. Ninja links with the install RPATH (`$ORIGIN/../lib64`). The script symlinks the libraries from `run/` into that directory. The version check also sets `LD_LIBRARY_PATH` to `run/`.
 
 Build tools are gcc, cmake, and ninja, plus the libraries installed by `dockerfile/Dockerfile.wireshark-ubi9-build` from the bootstrap image's RHEL 9 repositories (BaseOS, AppStream, and CodeReady Builder). Qt 6, libsmi, nghttp3, spandsp, iLBC, bcg729, and opencore-amr are not in RHEL 9 and stay off.
@@ -167,6 +175,8 @@ Edit `versions/RHEL9.env` and rename `src/wireshark-$WIRESHARK_VERSION` so the d
 - `Wireshark source directory not found`: the tree name or the `CMakeLists.txt` version does not match `WIRESHARK_VERSION`.
 - `Packet Penguin plugin directory is missing`: `--package` requires a CMake plugin under `src/plugins` or `plugins`.
 - `include could not find requested file: WiresharkPlugin` or `Unknown CMake command "set_module_info"`: that `CMakeLists.txt` is an in-tree plugin and was configured on its own. Re-run `./src/scripts/compile-wireshark.sh` so it links the plugin into the Wireshark build before CMake runs.
+- `Could NOT find Asciidoctor (missing: ASCIIDOCTOR_EXECUTABLE)`: Asciidoctor builds the user guide and man pages. The configure continues without it. The RPM does not need those docs.
+- `Unknown CMake command "add_wireshark_epan_plugin_library"`: that name is from Wireshark 4.2 and earlier. `cmake/modules/WiresharkPlugin.cmake` defines it as `add_wireshark_plugin_library(<name> epan)`. Clean the CMake build directory and configure again.
 - `libwireshark.so.19: cannot open shared object file`: the build-tree binary's RPATH is `$ORIGIN/../lib64` while the libraries are in `run/`. From a checkout whose scripts live in `/src/scripts`, the binary is `/src/build/rhel9/wireshark/run/tshark`. Re-run the compile script so it recreates `src/build/rhel9/wireshark/lib64`, or link the libraries yourself: `mkdir -p /src/build/rhel9/wireshark/lib64` and `ln -sfn "../run/<library>"` for each `lib*.so*` in `run/`. The version check also accepts `LD_LIBRARY_PATH` pointed at `run/`.
 - `rpmbuild is not installed`: rebuild the compile image; `rpm-build` is installed by `dockerfile/Dockerfile.wireshark-ubi9-build`.
 - `podman or docker is required`: the docker and publish jobs need a container engine on the runner.

@@ -19,7 +19,7 @@ usage() {
 Usage: compile-wireshark.sh [--rhel 9] [--clean] [--build] [--test] [--package] [--check]
 
   --rhel N    Load versions/RHELN.env. Default: 9.
-  --clean     Remove the out-of-source build directory.
+  --clean     Remove the CMake build directory under src/build (rhelN/wireshark).
   --build     Configure, compile, and install Wireshark and any CMake plugins.
   --test      Run tshark and the Wireshark GUI version check.
   --package   Build the RHEL RPM from the staged install.
