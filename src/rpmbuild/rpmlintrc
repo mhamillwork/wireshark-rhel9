@@ -1,6 +1,5 @@
-# wireshark-ppv installs under /usr/local so it can sit beside the RHEL wireshark
-# package. rpmlint reports that location; it is the packaging choice, not a
-# defect in the payload.
+# The package installs under /usr/local. rpmlint reports that location; it is
+# the packaging choice, not a defect in the payload.
 addFilter(r"dir-or-file-in-usr-local")
 
 # The pipeline builds the RPM. Signing, when required, is a separate release

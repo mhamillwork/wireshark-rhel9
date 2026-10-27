@@ -32,9 +32,9 @@ export REQUIRE_PLUGINS=1
 
 "$root/src/scripts/build-rpm.sh"
 
-mapfile -t rpms < <(find "$ARTIFACT_DIR" -type f -name 'wireshark-ppv-4.6.9-1.ppv1.0.5.el9.*.rpm' | sort)
+mapfile -t rpms < <(find "$ARTIFACT_DIR" -type f -name 'wireshark-4.6.9-1.ppv1.0.5.el9.*.rpm' | sort)
 [ "${#rpms[@]}" -eq 1 ] || {
-  echo "expected one wireshark-ppv RPM, found ${#rpms[@]}" >&2
+  echo "expected one wireshark RPM, found ${#rpms[@]}" >&2
   find "$ARTIFACT_DIR" -type f -print >&2 || true
   exit 1
 }
