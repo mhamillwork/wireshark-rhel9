@@ -76,6 +76,7 @@ grep -q 'dockerd' k8s/wireshark-docker.yaml || build_fail "engine manifest does 
 grep -q 'tcp://0.0.0.0:2375' k8s/wireshark-docker.yaml || build_fail "engine manifest does not listen on 2375"
 grep -q '/var/lib/docker' k8s/wireshark-docker.yaml || build_fail "engine manifest does not keep images on the volume"
 grep -q 'type: Recreate' k8s/wireshark-docker.yaml || build_fail "engine manifest does not recreate the single replica"
+[ "$(grep -c '^  namespace: gitlab$' k8s/wireshark-docker.yaml)" -eq 3 ] || build_fail "engine manifest objects are not all in the gitlab namespace"
 grep -q 'docker cp' src/scripts/run-compile-image.sh || build_fail "remote daemon path does not copy the checkout"
 grep -q '/workspace' src/scripts/run-compile-image.sh || build_fail "remote daemon path does not use /workspace"
 grep -q 'qt5-qtbase-gui' dockerfile/Dockerfile.wireshark-ubi9-runtime || build_fail "runtime image is missing the Qt xcb platform package"

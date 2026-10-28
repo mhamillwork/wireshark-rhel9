@@ -88,13 +88,13 @@ docker build \
   -t artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap-docker:9.8 .
 ```
 
-Apply `k8s/wireshark-docker.yaml` in the namespace where the runner starts job pods:
+Apply `k8s/wireshark-docker.yaml`. The claim, Deployment, and Service set `namespace: gitlab`, which is where the runner starts job pods. `kubectl apply` uses that field, so the current context does not choose the namespace. The pipeline does not apply the file.
 
 ```bash
 kubectl apply -f k8s/wireshark-docker.yaml
 ```
 
-The Deployment is privileged and runs `dockerd --host=tcp://0.0.0.0:2375` from that image. `/var/lib/docker` is a 100Gi volume, so `wireshark-ubi9:dev` is still there for the next job. The claim is read-write once, so the Deployment strategy is Recreate. The Service name is `wireshark-docker`, ClusterIP port 2375, with no TLS. Do not publish that Service outside the cluster. GitLab sets `DOCKER_HOST=tcp://wireshark-docker:2375` and an empty `DOCKER_TLS_CERTDIR`. A runner in a different namespace uses `tcp://wireshark-docker.<namespace>.svc:2375` instead. A shell runner that already has a local engine overrides `DOCKER_HOST` to `unix:///var/run/docker.sock`.
+The Deployment is privileged and runs `dockerd --host=tcp://0.0.0.0:2375` from that image. `/var/lib/docker` is a 100Gi volume, so `wireshark-ubi9:dev` is still there for the next job. The claim is read-write once, so the Deployment strategy is Recreate. The Service name is `wireshark-docker`, ClusterIP port 2375, with no TLS. Do not publish that Service outside the cluster. GitLab sets `DOCKER_HOST=tcp://wireshark-docker:2375` and an empty `DOCKER_TLS_CERTDIR`. That short name resolves for job pods in `gitlab`. A shell runner that already has a local engine overrides `DOCKER_HOST` to `unix:///var/run/docker.sock`.
 
 `src/scripts/run-compile-image.sh` bind-mounts the checkout when `DOCKER_HOST` is a local socket. A `tcp://` daemon resolves that path on the engine pod, so the script copies the checkout to `/workspace` and copies `src/build` and `src/artifacts` back. `docker build` sends its context from the job, so the compile and runtime image builds do not need that copy. `DOCKER_BUILDKIT=0` keeps `docker build` on the engine's built-in builder.
 
@@ -216,6 +216,6 @@ Edit `versions/RHEL9.env` and rename `src/wireshark-$WIRESHARK_VERSION` so the d
 - `rpmbuild is not installed`: rebuild the compile image; `rpm-build` is installed by `dockerfile/Dockerfile.wireshark-ubi9-build`.
 - `docker is required`: the job image is missing the client, or `PATH` does not include it. The engine is the `wireshark-docker` Service, not a socket on the node.
 - `compile image wireshark-ubi9:dev is not on this Docker daemon`: `compile-image` did not run against this `DOCKER_HOST`, or the engine pod was replaced without its volume.
-- connection refused for `wireshark-docker:2375`: apply `k8s/wireshark-docker.yaml` in the runner namespace and wait until the pod is Ready. The namespace has to allow a privileged pod.
+- connection refused for `wireshark-docker:2375`: apply `k8s/wireshark-docker.yaml` and wait until the pod is Ready in `gitlab`. That namespace has to allow a privileged pod.
 - `No match for argument: docker-ce` or `containerd.io`: Satellite does not have Docker Engine. The job image build stops there.
 - Registry login failed: check the masked variables, DNS for `artifactory.tahaa.local`, and the CA trust. Do not pass `--tls-verify=false`.

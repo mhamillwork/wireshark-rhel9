@@ -7,10 +7,11 @@
 # Dockerfiles still FROM ubi9-tahaa-bootstrap.
 #
 # Kubernetes nodes do not provide a Docker socket. Apply
-# k8s/wireshark-docker.yaml in the runner namespace. That Deployment runs
-# dockerd from this same image, privileged, and keeps the local tags on its
-# volume. DOCKER_HOST below points every job at that Service. A shell runner
-# with its own engine overrides DOCKER_HOST to unix:///var/run/docker.sock.
+# k8s/wireshark-docker.yaml. Its objects are in the gitlab namespace, with
+# the runner. That Deployment runs dockerd from this same image, privileged,
+# and keeps the local tags on its volume. DOCKER_HOST below points every job
+# at that Service. A shell runner with its own engine overrides DOCKER_HOST
+# to unix:///var/run/docker.sock.
 # compile-image and the jobs that run the compile image must use the same
 # Docker daemon, because the tag stays on that daemon.
 #
