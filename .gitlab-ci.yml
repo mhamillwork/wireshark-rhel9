@@ -35,7 +35,7 @@ stages:
   - publish
 
 variables:
-  BOOTSTRAP_IMAGE: artifactory.tahaa.local/tahaa-image-local/ubi9-tahaa-bootstrap:9.8
+  BOOTSTRAP_IMAGE: artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap:9.8
   WIRESHARK_IMAGE: wireshark-ubi9:dev
   # Runtime image. A separate tag so the build does not replace the compile image.
   LOCAL_IMAGE: wireshark-ppv:candidate

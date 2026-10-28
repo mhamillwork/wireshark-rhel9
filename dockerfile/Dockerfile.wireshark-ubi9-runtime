@@ -39,7 +39,7 @@
 #   docker run --rm -e QT_QPA_PLATFORM=offscreen wireshark-ppv:candidate \
 #     /usr/local/bin/tshark -v
 
-ARG BOOTSTRAP_IMAGE=artifactory.tahaa.local/tahaa-image-local/ubi9-tahaa-bootstrap:9.8
+ARG BOOTSTRAP_IMAGE=artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap:9.8
 
 FROM ${BOOTSTRAP_IMAGE}
 

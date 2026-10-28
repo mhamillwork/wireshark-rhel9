@@ -17,7 +17,7 @@
 # QT_QPA_PLATFORM=offscreen. RHEL 9 ships Qt 5.15, not Qt 6, and it does not
 # ship libsmi-devel, nghttp3, spandsp, iLBC, bcg729, or opencore-amr.
 
-ARG BOOTSTRAP_IMAGE=artifactory.tahaa.local/tahaa-image-local/ubi9-tahaa-bootstrap:9.8
+ARG BOOTSTRAP_IMAGE=artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap:9.8
 
 FROM ${BOOTSTRAP_IMAGE}
 
