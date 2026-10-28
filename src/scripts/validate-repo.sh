@@ -59,12 +59,16 @@ grep -q 'artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap:9.8
 grep -q 'artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap:9.8' dockerfile/Dockerfile.wireshark-ubi9-runtime || build_fail "runtime Dockerfile bootstrap image changed"
 grep -q 'artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap-docker:9.8' .gitlab-ci.yml || build_fail "GitLab job image is not the bootstrap image with the docker client"
 grep -q 'artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap:9.8' dockerfile/Dockerfile.ubi9-tahaa-bootstrap-docker || build_fail "job image Dockerfile does not start from the bootstrap image"
-grep -q 'docker-ce-cli' dockerfile/Dockerfile.ubi9-tahaa-bootstrap-docker || build_fail "job image Dockerfile does not install the Docker client"
-grep -qE '^[[:space:]]+docker-ce[[:space:]]*\\$' dockerfile/Dockerfile.ubi9-tahaa-bootstrap-docker || build_fail "job image Dockerfile does not install docker-ce"
-grep -qE '^[[:space:]]+containerd\.io[[:space:]]*\\$' dockerfile/Dockerfile.ubi9-tahaa-bootstrap-docker || build_fail "job image Dockerfile does not install containerd.io"
-grep -q 'command -v dockerd' dockerfile/Dockerfile.ubi9-tahaa-bootstrap-docker || build_fail "job image Dockerfile does not check for dockerd"
-if grep -q 'install docker;' dockerfile/Dockerfile.ubi9-tahaa-bootstrap-docker || grep -q 'install docker ' dockerfile/Dockerfile.ubi9-tahaa-bootstrap-docker; then
-  build_fail "job image Dockerfile installs the distro docker package"
+grep -q 'install-job-image-packages.sh' dockerfile/Dockerfile.ubi9-tahaa-bootstrap-docker || build_fail "job image Dockerfile does not run the package install script"
+grep -q 'docker-ce-cli' src/scripts/install-job-image-packages.sh || build_fail "job image install script does not install the Docker client"
+grep -qE '^[[:space:]]+docker-ce[[:space:]]*\\$' src/scripts/install-job-image-packages.sh || build_fail "job image install script does not install docker-ce"
+grep -qE '^[[:space:]]+containerd\.io$' src/scripts/install-job-image-packages.sh || build_fail "job image install script does not install containerd.io"
+grep -q 'command -v dockerd' src/scripts/install-job-image-packages.sh || build_fail "job image install script does not check for dockerd"
+if grep -q 'install docker;' src/scripts/install-job-image-packages.sh || grep -q 'install docker ' src/scripts/install-job-image-packages.sh; then
+  build_fail "job image install script installs the distro docker package"
+fi
+if grep -q "printf 'assumeyes=1" dockerfile/Dockerfile.ubi9-tahaa-bootstrap-docker; then
+  build_fail "job image Dockerfile still edits dnf.conf in the build step that failed"
 fi
 grep -q 'DOCKER_HOST: tcp://wireshark-docker:2375' .gitlab-ci.yml || build_fail "GitLab DOCKER_HOST is not the in-cluster engine"
 grep -q 'DOCKER_TLS_CERTDIR: ""' .gitlab-ci.yml || build_fail "GitLab DOCKER_TLS_CERTDIR is not empty"
@@ -102,6 +106,7 @@ fi
 "$root/tests/test-build-config.sh"
 "$root/tests/test-intree-plugins.sh"
 "$root/tests/test-run-compile-image.sh"
+"$root/tests/test-install-job-image-packages.sh"
 if command -v rpmbuild >/dev/null 2>&1; then
   "$root/tests/test-rpm-metadata.sh"
 else
