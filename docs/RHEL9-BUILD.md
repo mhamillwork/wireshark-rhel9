@@ -79,7 +79,7 @@ rpm -qpl src/artifacts/rpms/rhel9/*.rpm
 
 The compile image and the runtime image are separate Dockerfiles. They share the bootstrap `artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap:9.8`, which already has the isolated-network certificates and repositories. They do not inherit each other: the published image does not contain the compiler. Do not turn TLS verification off.
 
-`dockerfile/Dockerfile.ubi9-tahaa-bootstrap-docker` is the GitLab job image. It starts FROM that bootstrap and installs the Docker client, git, and the archive tools the runner uses. The tag is `artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap-docker:9.8`. The engine stays on the runner.
+`dockerfile/Dockerfile.ubi9-tahaa-bootstrap-docker` is the GitLab job image. It starts FROM that bootstrap and installs `docker-ce-cli`, git, and the archive tools the runner uses. The tag is `artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap-docker:9.8`. The engine stays on the runner. Build it with Docker Engine. A failure in `fuse-overlayfs` while mounting `/var/lib/containers/storage` means the build command is not Docker Engine; `sudo modprobe fuse` provides `/dev/fuse` for that other storage driver.
 
 ```bash
 docker build \
