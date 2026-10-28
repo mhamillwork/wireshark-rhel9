@@ -217,5 +217,6 @@ Edit `versions/RHEL9.env` and rename `src/wireshark-$WIRESHARK_VERSION` so the d
 - `docker is required`: the job image is missing the client, or `PATH` does not include it. The engine is the `wireshark-docker` Service, not a socket on the node.
 - `compile image wireshark-ubi9:dev is not on this Docker daemon`: `compile-image` did not run against this `DOCKER_HOST`, or the engine pod was replaced without its volume.
 - connection refused for `wireshark-docker:2375`: apply `k8s/wireshark-docker.yaml` and wait until the pod is Ready in `gitlab`. That namespace has to allow a privileged pod.
-- `No match for argument: docker-ce` or `containerd.io`: Satellite does not have Docker Engine. The job image build stops there.
+- the engine pod is in `default`: delete `deployment`, `service`, and `pvc` `wireshark-docker` from `default`, then apply the file again with no `-n` flag. `kubectl apply -n default` overrides `namespace: gitlab`. A volume in `default` does not move to `gitlab`.
+- `No match for argument: docker-ce` or `containerd.io`, or `failed to solve` on the job-image `RUN`: Satellite does not have those packages in an enabled repo or in a repo whose id contains `docker`. The job image also enables CodeReady Builder for `libcgroup`. The distro package named `docker` is not a substitute. The build log line that starts with `printf` is the start of that `RUN`; the `dnf` error above it is the failure.
 - Registry login failed: check the masked variables, DNS for `artifactory.tahaa.local`, and the CA trust. Do not pass `--tls-verify=false`.

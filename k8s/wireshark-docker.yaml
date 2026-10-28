@@ -1,8 +1,10 @@
 # Docker engine for the GitLab Kubernetes runner.
 #
 # The runner and its job pods are in the gitlab namespace. The claim, the
-# Deployment, and the Service each set that namespace, so apply creates them
-# there regardless of the current kubectl context:
+# Deployment, and the Service each set that namespace. Apply with no -n flag.
+# kubectl -n default overrides the namespace written below and creates the
+# objects in default. Objects already created in default stay there until
+# they are deleted.
 #
 #   kubectl apply -f k8s/wireshark-docker.yaml
 #
