@@ -2,3 +2,8 @@
 build
 install
 images
+# Compile outputs. docker compose mounts the workstation src tree over /src,
+# so these stay out of the image copied by dockerfile/Dockerfile.wireshark-ubi9-build.
+src/build
+src/artifacts
+src/wireshark-*/build
