@@ -47,7 +47,9 @@ grep -q 'publish-rpm.sh' .gitlab-ci.yml || build_fail "GitLab publish job does n
 grep -q '^Name:[[:space:]]*wireshark$' src/rpmbuild/RHEL-9/SPECS/wireshark.spec.in || build_fail "RPM spec template is missing the package name"
 grep -q 'cap_net_raw,cap_net_admin=ep' src/scripts/build-rpm.sh || build_fail "RPM file list does not grant dumpcap capture capabilities"
 grep -qxF 'src/build' .dockerignore || build_fail "compile image dockerignore does not exclude src/build"
-grep -qxF 'src/artifacts' .dockerignore || build_fail "compile image dockerignore does not exclude src/artifacts"
+if grep -qxF 'src/artifacts' .dockerignore; then
+  build_fail "dockerignore excludes src/artifacts, which the runtime image copies"
+fi
 grep -qxF 'src/wireshark-*/build' .dockerignore || build_fail "compile image dockerignore does not exclude the in-tree Wireshark build"
 grep -q 'src/build' dockerfile/Dockerfile.wireshark-ubi9-build || build_fail "compile Dockerfile does not document the src/build exclusion"
 grep -q 'artifactory.tahaa.local/tahaa-image-local/ubi9-tahaa-bootstrap:9.8' dockerfile/Dockerfile.wireshark-ubi9-build || build_fail "compile Dockerfile bootstrap image changed"
