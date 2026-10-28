@@ -1,6 +1,11 @@
 # RHEL 9 build. The runner must already have the compile image loaded
 # (docker load). Pulling a public image is not required.
 #
+# Do not set image pull_policy. This runner's allowed_pull_policies list is
+# empty, so a policy in this file is rejected before the job starts. The
+# runner's own pull policy is used, and that policy must keep the loaded
+# wireshark-ubi9:dev image.
+#
 # BUILD_TYPE defaults to dev. A dev pipeline publishes development image
 # tags only. It does not publish the release images or the RPM.
 #
@@ -37,7 +42,6 @@ variables:
 default:
   image:
     name: $WIRESHARK_IMAGE
-    pull_policy: if-not-present
     entrypoint: [""]
   interruptible: true
 
