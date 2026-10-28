@@ -15,26 +15,17 @@ ARG BOOTSTRAP_IMAGE=artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bo
 
 FROM ${BOOTSTRAP_IMAGE}
 
+# docker-ce-cli is the client package. Some repositories publish that same
+# client as docker. install_weak_deps=0 keeps the engine off this image.
 RUN printf 'assumeyes=1\nmax_parallel_downloads=10\ntsflags=nodocs\ninstall_weak_deps=0\n' >> /etc/dnf/dnf.conf \
     && if [ -e /etc/rhsm-host ]; then rm -rf /etc/rhsm-host; fi \
     && if [ -f /etc/yum.repos.d/ubi.repo ]; then sed -i '/^enabled=/a priority=1' /etc/yum.repos.d/ubi.repo; fi \
-    && bash -c 'set -euo pipefail; \
-        dnf -y install \
-          ca-certificates \
-          git \
-          gzip \
-          tar; \
-        if dnf -q repoquery --qf "%{name}\n" docker-ce-cli | grep -qx docker-ce-cli; then \
-          dnf -y install docker-ce-cli; \
-        elif dnf -q repoquery --qf "%{name}\n" docker | grep -qx docker; then \
-          dnf -y install docker; \
-        else \
-          echo "docker-ce-cli is not in the enabled repositories" >&2; \
-          exit 1; \
-        fi; \
-        command -v docker; \
-        docker --version; \
-        dnf clean all; \
-        rm -rf /var/cache/dnf'
+    && dnf -y install ca-certificates git gzip tar \
+    && if ! dnf -y install docker-ce-cli; then dnf -y install docker; fi \
+    && command -v docker \
+    && docker --version \
+    && dnf clean all \
+    && rm -rf /var/cache/dnf \
+    && ln -sfn /run/secrets/rhsm /etc/rhsm-host
 
 CMD ["bash"]
