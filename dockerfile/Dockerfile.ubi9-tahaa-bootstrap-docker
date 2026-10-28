@@ -15,15 +15,17 @@ ARG BOOTSTRAP_IMAGE=artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bo
 
 FROM ${BOOTSTRAP_IMAGE}
 
-# docker-ce-cli is the client package. Some repositories publish that same
-# client as docker. install_weak_deps=0 keeps the engine off this image.
+# docker-ce-cli is the Docker client. The engine stays on the runner and is
+# reached through the mounted socket. install_weak_deps=0 keeps that engine
+# out of this image. The distro package named docker stores images under
+# /var/lib/containers and mounts them with fuse-overlayfs, which fails when
+# /dev/fuse is absent, so this image does not install it.
 RUN printf 'assumeyes=1\nmax_parallel_downloads=10\ntsflags=nodocs\ninstall_weak_deps=0\n' >> /etc/dnf/dnf.conf \
     && if [ -e /etc/rhsm-host ]; then rm -rf /etc/rhsm-host; fi \
     && if [ -f /etc/yum.repos.d/ubi.repo ]; then sed -i '/^enabled=/a priority=1' /etc/yum.repos.d/ubi.repo; fi \
-    && dnf -y install ca-certificates git gzip tar \
-    && if ! dnf -y install docker-ce-cli; then dnf -y install docker; fi \
+    && dnf -y install ca-certificates git gzip tar docker-ce-cli \
     && command -v docker \
-    && docker --version \
+    && docker --version | grep -q '^Docker version ' \
     && dnf clean all \
     && rm -rf /var/cache/dnf \
     && ln -sfn /run/secrets/rhsm /etc/rhsm-host
