@@ -1,10 +1,17 @@
-# RHEL 9 build. The runner must already have the compile image loaded
-# (docker load). Pulling a public image is not required.
+# RHEL 9 build. The compile-image job builds
+# dockerfile/Dockerfile.wireshark-ubi9-build and tags it wireshark-ubi9:dev.
+# That build reaches Satellite with --add-host. Later jobs docker run that
+# local tag. GitLab does not pull wireshark-ubi9:dev: the job image is the
+# bootstrap image, which Artifactory can serve.
+#
+# The job needs the docker client and the engine socket. A shell runner has
+# both on the host. A Docker executor must mount /var/run/docker.sock into
+# the job, and the bootstrap image must contain the docker client.
+# compile-image and the jobs that run the compile image must use the same
+# Docker daemon, because the tag stays on that daemon.
 #
 # Do not set image pull_policy. This runner's allowed_pull_policies list is
-# empty, so a policy in this file is rejected before the job starts. The
-# runner's own pull policy is used, and that policy must keep the loaded
-# wireshark-ubi9:dev image.
+# empty, so a policy in this file is rejected before the job starts.
 #
 # BUILD_TYPE defaults to dev. A dev pipeline publishes development image
 # tags only. It does not publish the release images or the RPM.
@@ -18,6 +25,7 @@
 # A BUILD_TYPE variable by itself cannot publish a release.
 
 stages:
+  - image
   - validate
   - compile
   - test
@@ -27,6 +35,7 @@ stages:
   - publish
 
 variables:
+  BOOTSTRAP_IMAGE: artifactory.tahaa.local/tahaa-image-local/ubi9-tahaa-bootstrap:9.8
   WIRESHARK_IMAGE: wireshark-ubi9:dev
   # Runtime image. A separate tag so the build does not replace the compile image.
   LOCAL_IMAGE: wireshark-ppv:candidate
@@ -41,21 +50,32 @@ variables:
 
 default:
   image:
-    name: $WIRESHARK_IMAGE
+    name: $BOOTSTRAP_IMAGE
     entrypoint: [""]
   interruptible: true
 
+compile-image:
+  stage: image
+  script:
+    - command -v docker >/dev/null 2>&1 || { echo "docker is required to build the compile image" >&2; exit 1; }
+    - |
+      docker build \
+        --add-host satellite9b.hsv.local:10.10.106.59 \
+        -f dockerfile/Dockerfile.wireshark-ubi9-build \
+        -t "${WIRESHARK_IMAGE}" .
+
 validate:
   stage: validate
+  needs: ["compile-image"]
   script:
-    - ./src/scripts/validate-repo.sh
+    - ./src/scripts/run-compile-image.sh ./src/scripts/validate-repo.sh
     - test "$BUILD_TYPE" = dev -o "$BUILD_TYPE" = release
 
 compile:
   stage: compile
   needs: ["validate"]
   script:
-    - ./src/scripts/compile-wireshark.sh --rhel 9 --build
+    - ./src/scripts/run-compile-image.sh ./src/scripts/compile-wireshark.sh --rhel 9 --build
   artifacts:
     paths:
       - src/build/rhel9/wireshark/run/
@@ -66,7 +86,7 @@ test-compile:
   stage: test
   needs: ["compile"]
   script:
-    - ./src/scripts/compile-wireshark.sh --rhel 9 --test
+    - ./src/scripts/run-compile-image.sh ./src/scripts/compile-wireshark.sh --rhel 9 --test
   artifacts:
     paths:
       - src/build/rhel9/logs/
@@ -76,7 +96,7 @@ rpm:
   stage: rpm
   needs: ["test-compile"]
   script:
-    - ./src/scripts/compile-wireshark.sh --rhel 9 --package
+    - ./src/scripts/run-compile-image.sh ./src/scripts/compile-wireshark.sh --rhel 9 --package
   artifacts:
     paths:
       - src/artifacts/rpms/rhel9/
@@ -88,7 +108,7 @@ package-test:
   stage: package-test
   needs: ["rpm"]
   script:
-    - ./src/scripts/test-rpm.sh
+    - ./src/scripts/run-compile-image.sh ./src/scripts/test-rpm.sh
   artifacts:
     paths:
       - src/build/rhel9/logs/package-test.txt

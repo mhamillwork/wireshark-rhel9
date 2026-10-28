@@ -60,6 +60,8 @@ grep -q 'artifactory.tahaa.local/tahaa-image-local/ubi9-tahaa-bootstrap:9.8' doc
 grep -q 'qt5-qtbase-gui' dockerfile/Dockerfile.wireshark-ubi9-runtime || build_fail "runtime image is missing the Qt xcb platform package"
 grep -q 'QT_X11_NO_MITSHM=1' dockerfile/Dockerfile.wireshark-ubi9-runtime || build_fail "runtime image is missing QT_X11_NO_MITSHM"
 grep -q '/usr/local/bin/wireshark' dockerfile/Dockerfile.wireshark-ubi9-runtime || build_fail "runtime image command is not the Wireshark GUI"
+grep -q 'Dockerfile.wireshark-ubi9-build' .gitlab-ci.yml || build_fail "GitLab does not build the compile Dockerfile"
+grep -q 'run-compile-image.sh' .gitlab-ci.yml || build_fail "GitLab compile jobs do not run inside the compile image"
 grep -q 'Dockerfile.wireshark-ubi9-runtime' .gitlab-ci.yml || build_fail "GitLab docker job does not build the runtime Dockerfile"
 grep -q -- '--add-host satellite9b.hsv.local:10.10.106.59' README.md || build_fail "README compile build is missing the Satellite host"
 grep -q 'Dockerfile.wireshark-ubi9-runtime' README.md || build_fail "README is missing the runtime image build"

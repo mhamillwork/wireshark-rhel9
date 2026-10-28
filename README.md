@@ -35,7 +35,7 @@ The runtime image sets `QT_X11_NO_MITSHM=1`. It still leaves `DISPLAY` unset: pa
 
 ## GitLab CI
 
-Push this repository to the isolated GitLab. Jobs use the image already loaded on the runner. `BUILD_TYPE` defaults to `dev`. A development pipeline validates, compiles, tests, builds the RPM, and publishes development image tags. It does not publish the release images or the RPM. `BUILD_TYPE=release` publishes those, and only from the matching protected Git tag. Override the compile image name with CI variable `WIRESHARK_IMAGE` if the loaded tag is different. Details are in `docs/RHEL9-BUILD.md`.
+Push this repository to the isolated GitLab. The first job builds `dockerfile/Dockerfile.wireshark-ubi9-build` on the runner, which can reach Satellite, and tags it `wireshark-ubi9:dev`. The compile jobs then run inside that image. `BUILD_TYPE` defaults to `dev`. A development pipeline validates, compiles, tests, builds the RPM, and publishes development image tags. It does not publish the release images or the RPM. `BUILD_TYPE=release` publishes those, and only from the matching protected Git tag. Override the compile image name with CI variable `WIRESHARK_IMAGE` if the loaded tag is different. Details are in `docs/RHEL9-BUILD.md`.
 
 The compile job saves `src/build/rhel9/wireshark/run/`. The build is also installed to `/usr/local`, which gives plugins `WiresharkConfig.cmake` and the libraries they link.
 
