@@ -39,6 +39,11 @@ if grep -RIn --exclude-dir=.git -e "$hardcoded_path" src/scripts .gitlab-ci.yml 
 fi
 
 grep -q 'BUILD_TYPE' .gitlab-ci.yml || build_fail ".gitlab-ci.yml has no BUILD_TYPE"
+grep -q 'value: "dev"' .gitlab-ci.yml || build_fail "GitLab BUILD_TYPE default is not dev"
+grep -q 'CI_COMMIT_REF_PROTECTED' .gitlab-ci.yml || build_fail "GitLab release publish is not limited to a protected ref"
+grep -q 'CI_COMMIT_TAG' .gitlab-ci.yml || build_fail "GitLab release publish is not limited to the release Git tag"
+grep -q 'tahaa-rpm-local' versions/RHEL9.env || build_fail "versions file is missing the RPM repository"
+grep -q 'publish-rpm.sh' .gitlab-ci.yml || build_fail "GitLab publish job does not upload the RPM"
 grep -q '^Name:[[:space:]]*wireshark$' src/rpmbuild/RHEL-9/SPECS/wireshark.spec.in || build_fail "RPM spec template is missing the package name"
 grep -q 'cap_net_raw,cap_net_admin=ep' src/scripts/build-rpm.sh || build_fail "RPM file list does not grant dumpcap capture capabilities"
 grep -q 'artifactory.tahaa.local/tahaa-image-local/ubi9-tahaa-bootstrap:9.8' dockerfile/Dockerfile.wireshark-ubi9-build || build_fail "compile Dockerfile bootstrap image changed"

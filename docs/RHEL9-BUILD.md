@@ -122,32 +122,43 @@ docker run --rm \
 
 ## GitLab
 
-Commits run with `BUILD_TYPE=dev`. A manual pipeline can select `dev` or `release`.
+`BUILD_TYPE` defaults to `dev`. A manual pipeline can select `dev` or `release`. Selecting `release` on an ordinary branch does not publish.
 
-Stages, in order: validate, compile, test, rpm, package-test, docker, publish. Publish does not run unless the earlier jobs passed.
+Stages, in order: validate, compile, test, rpm, package-test, docker, publish. Publish does not run unless the earlier jobs passed. The rpm job still builds the RPM for the runtime image on a dev pipeline. The RPM is uploaded only when the pipeline is a release.
 
-Development tags:
+Image names and the RPM filename come from `versions/RHEL9.env`:
+
+```text
+<WIRESHARK_VERSION>-ppv<PACKET_PENGUIN_VERSION>-rhel<RHEL_VERSION>
+wireshark-<WIRESHARK_VERSION>-<RPM_PACKAGE_RELEASE>.ppv<PACKET_PENGUIN_VERSION>.el<RHEL_VERSION>.<arch>.rpm
+```
+
+With the versions in that file today, a release publishes:
+
+```text
+oci://artifactory.tahaa.local/tahaa-image-local/wireshark:4.6.9-ppv1.0.5-rhel9
+oci://artifactory.tahaa.local/tahaa-image-local/wireshark:4.6.9-ppv1.0.5-rhel9-build
+https://artifactory.tahaa.local/artifactory/tahaa-rpm-local/wireshark-4.6.9-1.ppv1.0.5.el9.<arch>.rpm
+```
+
+Docker pushes the same image names without the `oci://` scheme. The first image is the runtime image. The second is the compile image already loaded on the runner. The RPM goes to the `tahaa-rpm-local` repository.
+
+Development tags, for the runtime image only:
 
 ```text
 artifactory.tahaa.local/tahaa-image-local/wireshark:4.6.9-ppv1.0.5-rhel9-dev-mhamill
 artifactory.tahaa.local/tahaa-image-local/wireshark:4.6.9-ppv1.0.5-rhel9-dev-mhamill-a1b2c3d4
 ```
 
-The username comes from `GITLAB_USER_LOGIN` and is sanitized. The tag with the short commit SHA is the immutable one. The username tag moves.
-
-Release tag, with no `-dev` suffix:
-
-```text
-artifactory.tahaa.local/tahaa-image-local/wireshark:4.6.9-ppv1.0.5-rhel9
-```
+The username comes from `GITLAB_USER_LOGIN` and is sanitized. The tag with the short commit SHA is the immutable one. The username tag moves. Those tags do not replace the release runtime tag or the `-build` tag.
 
 A release is published only when all of these are true:
 
 - `BUILD_TYPE=release`
 - the Git ref is protected (`CI_COMMIT_REF_PROTECTED=true`)
-- the pipeline is the Git tag `4.6.9-ppv1.0.5-rhel9`
+- the pipeline is the Git tag `<WIRESHARK_VERSION>-ppv<PACKET_PENGUIN_VERSION>-rhel<RHEL_VERSION>`
 
-Setting `BUILD_TYPE=release` on an ordinary branch does not publish. If the release tag already exists in the registry, the push stops. Prefer an immutable tag policy in Artifactory as well.
+Setting `BUILD_TYPE=release` on an ordinary branch does not publish. If a release image tag or the RPM is already in Artifactory, the push stops. Prefer an immutable tag policy in Artifactory as well.
 
 The runner uses the compile image already loaded as `wireshark-ubi9:dev` (`pull_policy: if-not-present`). Rebuild that image after this change so it contains `rpm-build` and `versions/`. The rpm job compiles again: the compile job keeps `run/` and the logs, and the package step needs a fresh CMake build in that job. Publish uses `docker` from the job, so the runner has to provide that command (a shell runner, or a client plus the engine socket). The registry must be reachable from the runner, and the runner must trust the Artifactory certificate. Do not disable TLS verification.
 
@@ -161,7 +172,8 @@ Merge request pipelines run the checks and do not publish. A branch pipeline pub
 | `ARTIFACTORY_PASSWORD` | yes | when dev runs on a protected branch | Registry password or token |
 | `ARTIFACTORY_REGISTRY` | no | no | Defaults to `artifactory.tahaa.local` |
 | `ARTIFACTORY_REPOSITORY` | no | no | Defaults to `tahaa-image-local` |
-| `BUILD_TYPE` | no | no | `dev` or `release` |
+| `ARTIFACTORY_RPM_REPOSITORY` | no | no | Defaults to `tahaa-rpm-local`. Used when `BUILD_TYPE=release` |
+| `BUILD_TYPE` | no | no | Defaults to `dev`. `release` publishes the release images and the RPM |
 
 Mask both registry variables. Protect them when development pipelines run on a protected branch such as `main`: a protected variable is not visible to an unprotected branch, so those pipelines cannot log in. A release still cannot be published from a variable alone. It also needs the protected Git tag. The scripts never print the password. `artifacts/build-metadata.json` records versions, commit, pipeline id, and image tag, and does not contain credentials.
 

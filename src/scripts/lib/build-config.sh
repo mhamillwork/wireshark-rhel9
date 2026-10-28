@@ -91,7 +91,7 @@ build_version_ok() {
 
 build_load_versions() {
   local rhel="${1:-}"
-  local file saved_registry saved_repository saved_image
+  local file saved_registry saved_repository saved_image saved_rpm_repository
   case "$rhel" in
     8|9) ;;
     *) build_fail "unsupported RHEL version: ${rhel:-<empty>}" ;;
@@ -105,6 +105,7 @@ build_load_versions() {
   saved_registry="${ARTIFACTORY_REGISTRY-}"
   saved_repository="${ARTIFACTORY_REPOSITORY-}"
   saved_image="${IMAGE_NAME-}"
+  saved_rpm_repository="${ARTIFACTORY_RPM_REPOSITORY-}"
   # shellcheck disable=SC1090
   set -a
   # shellcheck disable=SC1090
@@ -127,11 +128,13 @@ build_load_versions() {
   if [ -n "$saved_registry" ]; then ARTIFACTORY_REGISTRY="$saved_registry"; fi
   if [ -n "$saved_repository" ]; then ARTIFACTORY_REPOSITORY="$saved_repository"; fi
   if [ -n "$saved_image" ]; then IMAGE_NAME="$saved_image"; fi
+  if [ -n "$saved_rpm_repository" ]; then ARTIFACTORY_RPM_REPOSITORY="$saved_rpm_repository"; fi
   ARTIFACTORY_REGISTRY="${ARTIFACTORY_REGISTRY:-artifactory.tahaa.local}"
   ARTIFACTORY_REPOSITORY="${ARTIFACTORY_REPOSITORY:-tahaa-image-local}"
   IMAGE_NAME="${IMAGE_NAME:-wireshark}"
+  ARTIFACTORY_RPM_REPOSITORY="${ARTIFACTORY_RPM_REPOSITORY:-tahaa-rpm-local}"
   export WIRESHARK_VERSION PACKET_PENGUIN_VERSION RHEL_VERSION RPM_PACKAGE_RELEASE
-  export ARTIFACTORY_REGISTRY ARTIFACTORY_REPOSITORY IMAGE_NAME VERSIONS_FILE
+  export ARTIFACTORY_REGISTRY ARTIFACTORY_REPOSITORY IMAGE_NAME ARTIFACTORY_RPM_REPOSITORY VERSIONS_FILE
 }
 
 build_tree_version() {
@@ -329,6 +332,12 @@ build_sanitize_tag() {
 
 build_release_tag() {
   build_sanitize_tag "${WIRESHARK_VERSION}-ppv${PACKET_PENGUIN_VERSION}-rhel${RHEL_VERSION}"
+}
+
+# Compile image published beside the runtime image. The suffix is fixed;
+# the version prefix comes from build_release_tag.
+build_build_image_tag() {
+  build_sanitize_tag "$(build_release_tag)-build"
 }
 
 build_dev_tag() {

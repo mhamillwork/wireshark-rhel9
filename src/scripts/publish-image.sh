@@ -27,26 +27,38 @@ release="$(build_release_tag)"
 if [ "$build_type" = release ]; then
   [ "${CI_COMMIT_REF_PROTECTED:-}" = "true" ] || build_fail "release publish requires a protected Git ref"
   [ "${CI_COMMIT_TAG:-}" = "$release" ] || build_fail "release publish requires git tag $release"
-  tags=("$release")
-else
-  tags=("$(build_dev_tag)" "$(build_dev_sha_tag)")
 fi
 
-printf '%s' "$ARTIFACTORY_PASSWORD" | "$engine" login --password-stdin -u "$ARTIFACTORY_USERNAME" "$ARTIFACTORY_REGISTRY"
-
-local_image="${LOCAL_IMAGE:-wireshark-ppv:candidate}"
-for tag in "${tags[@]}"; do
-  dest="$repo:$tag"
-  if [ "$build_type" = release ]; then
+publish_ref() {
+  local source_image="$1"
+  local dest="$2"
+  local protect="$3"
+  if [ "$protect" = 1 ]; then
     if "$engine" manifest inspect "$dest" >"$BUILD_ROOT/manifest-inspect.txt" 2>&1; then
       build_fail "release tag already exists and will not be overwritten: $dest"
     fi
     if ! grep -Eiq 'manifest unknown|not found|404|no such manifest' "$BUILD_ROOT/manifest-inspect.txt"; then
-      echo "error: could not confirm that the release tag is absent" >&2
+      echo "error: could not confirm that the release tag is absent: $dest" >&2
       exit 1
     fi
   fi
-  "$engine" tag "$local_image" "$dest"
+  if ! "$engine" image inspect "$source_image" >/dev/null 2>&1; then
+    build_fail "local image is not loaded: $source_image"
+  fi
+  "$engine" tag "$source_image" "$dest"
   "$engine" push "$dest"
   echo "Pushed $dest"
-done
+}
+
+printf '%s' "$ARTIFACTORY_PASSWORD" | "$engine" login --password-stdin -u "$ARTIFACTORY_USERNAME" "$ARTIFACTORY_REGISTRY"
+
+local_image="${LOCAL_IMAGE:-wireshark-ppv:candidate}"
+if [ "$build_type" = release ]; then
+  # Runtime image, then the compile image. Neither tag carries -dev.
+  publish_ref "$local_image" "$repo:$release" 1
+  publish_ref "${WIRESHARK_IMAGE:-wireshark-ubi9:dev}" "$repo:$(build_build_image_tag)" 1
+else
+  # Development tags cannot collide with the release runtime or -build tags.
+  publish_ref "$local_image" "$repo:$(build_dev_tag)" 0
+  publish_ref "$local_image" "$repo:$(build_dev_sha_tag)" 0
+fi

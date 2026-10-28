@@ -22,11 +22,17 @@ if [ -z "$short" ] || [ "$short" = unknown ]; then
   short="$(git -C "$(build_repo_root)" rev-parse --short=8 HEAD 2>/dev/null || echo unknown)"
 fi
 export CI_COMMIT_SHORT_SHA="$short"
+repo="$(build_image_repo)"
+build_image=""
+rpm_repository=""
 if [ "$build_type" = release ]; then
   tag="$(build_release_tag)"
+  build_image="${repo}:$(build_build_image_tag)"
+  rpm_repository="https://${ARTIFACTORY_REGISTRY}/artifactory/${ARTIFACTORY_RPM_REPOSITORY}"
 else
   tag="$(build_dev_sha_tag)"
 fi
+runtime_image="${repo}:${tag}"
 
 out="${METADATA_FILE:-$(build_repo_root)/artifacts/build-metadata.json}"
 mkdir -p "$(dirname "$out")"
@@ -40,8 +46,11 @@ cat > "$out" <<EOF
   "git_commit": "${commit}",
   "gitlab_pipeline_id": "${CI_PIPELINE_ID:-local}",
   "gitlab_user": "${GITLAB_USER_LOGIN:-}",
-  "image_repository": "$(build_image_repo)",
-  "image_tag": "${tag}"
+  "image_repository": "${repo}",
+  "image_tag": "${tag}",
+  "runtime_image": "${runtime_image}",
+  "build_image": "${build_image}",
+  "rpm_repository": "${rpm_repository}"
 }
 EOF
 echo "Metadata: $out"
