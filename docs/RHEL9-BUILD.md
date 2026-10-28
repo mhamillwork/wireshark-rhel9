@@ -19,7 +19,7 @@ Wireshark is `src/wireshark-$WIRESHARK_VERSION`. The directory suffix is the `WI
 
 There is no Packet Penguin source in this checkout, so packaging fails here until those plugins are added.
 
-The tests stay in `tests/` at the checkout root. The compile image copies `src/` and does not include that directory. GitLab runs `./src/scripts/validate-repo.sh`, which calls the tests from the checkout.
+The tests stay in `tests/` at the checkout root. The compile image copies `src/` and does not include that directory. It also leaves out `src/build` and `src/artifacts`; those are written on the workstation `src` mount. GitLab runs `./src/scripts/validate-repo.sh`, which calls the tests from the checkout.
 
 A plugin `CMakeLists.txt` that calls `include(WiresharkPlugin)` is the form in `plugins/epan/gryphon`. The compile script links that directory into the Wireshark source tree at `packet-penguin-plugins/` and writes `CMakeListsCustom.txt`, and Wireshark's CMake compiles it. A `CMakeLists.txt` that calls `find_package(Wireshark)` is built after Wireshark is installed. C sources with no `CMakeLists.txt` are compiled with Wireshark when they are linked into the tree, and they ship inside `libwireshark`. `--package` still requires one of those layouts.
 

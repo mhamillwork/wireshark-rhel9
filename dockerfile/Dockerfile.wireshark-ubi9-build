@@ -98,8 +98,11 @@ RUN printf 'assumeyes=1\nmax_parallel_downloads=10\ntsflags=nodocs\ninstall_weak
 # Version configuration used by src/scripts/compile-wireshark.sh.
 COPY versions/ /opt/wireshark-build/versions/
 
-# Wireshark sources, src/scripts, and src/plugins. The source directory name
-# follows WIRESHARK_VERSION from versions/RHEL9.env.
+# Wireshark sources, src/scripts, src/plugins, and src/rpmbuild. The source
+# directory name follows WIRESHARK_VERSION from versions/RHEL9.env.
+# src/build, src/artifacts, and an in-tree src/wireshark-*/build directory are
+# excluded by .dockerignore. docker compose mounts the workstation src tree
+# at /src, and compile-wireshark.sh writes the build and the RPMs there.
 COPY src/ /src/
 
 WORKDIR /src
