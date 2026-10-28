@@ -39,6 +39,9 @@ if grep -RIn --exclude-dir=.git -e "$hardcoded_path" src/scripts .gitlab-ci.yml 
 fi
 
 grep -q 'BUILD_TYPE' .gitlab-ci.yml || build_fail ".gitlab-ci.yml has no BUILD_TYPE"
+if grep -q 'pull_policy:' .gitlab-ci.yml; then
+  build_fail "GitLab CI sets pull_policy, which this runner's empty allowed_pull_policies list rejects"
+fi
 grep -q 'value: "dev"' .gitlab-ci.yml || build_fail "GitLab BUILD_TYPE default is not dev"
 grep -q 'CI_COMMIT_REF_PROTECTED' .gitlab-ci.yml || build_fail "GitLab release publish is not limited to a protected ref"
 grep -q 'CI_COMMIT_TAG' .gitlab-ci.yml || build_fail "GitLab release publish is not limited to the release Git tag"
