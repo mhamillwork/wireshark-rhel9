@@ -1,12 +1,12 @@
 # RHEL 9 build. The compile-image job builds
 # dockerfile/Dockerfile.wireshark-ubi9-build and tags it wireshark-ubi9:dev.
 # That build reaches Satellite with --add-host. Later jobs docker run that
-# local tag. GitLab does not pull wireshark-ubi9:dev: the job image is the
-# bootstrap image, which Artifactory can serve.
+# local tag. GitLab does not pull wireshark-ubi9:dev. The job image is
+# ubi9-tahaa-bootstrap-docker, the bootstrap image plus the Docker client.
+# The compile and runtime Dockerfiles still FROM ubi9-tahaa-bootstrap.
 #
-# The job needs the docker client and the engine socket. A shell runner has
-# both on the host. A Docker executor must mount /var/run/docker.sock into
-# the job, and the bootstrap image must contain the docker client.
+# The job needs that client and the engine socket. A shell runner has both
+# on the host. A Docker executor must mount /var/run/docker.sock into the job.
 # compile-image and the jobs that run the compile image must use the same
 # Docker daemon, because the tag stays on that daemon.
 #
@@ -35,7 +35,7 @@ stages:
   - publish
 
 variables:
-  BOOTSTRAP_IMAGE: artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap:9.8
+  BOOTSTRAP_IMAGE: artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap-docker:9.8
   WIRESHARK_IMAGE: wireshark-ubi9:dev
   # Runtime image. A separate tag so the build does not replace the compile image.
   LOCAL_IMAGE: wireshark-ppv:candidate
