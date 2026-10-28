@@ -57,6 +57,7 @@ printf 'cmake_minimum_required(VERSION 3.16)\n' > "$repo/wireshark-1.2.3/CMakeLi
   [ "$BUILD_DIR" = "$repo/build/rhel9/wireshark" ] || fail "build dir is $BUILD_DIR"
   export GITLAB_USER_LOGIN=mhamill CI_COMMIT_SHORT_SHA=a1b2c3d4
   [ "$(build_release_tag)" = "1.2.3-ppv9.9.9-rhel9" ] || fail "release tag $(build_release_tag)"
+  [ "$(build_build_image_tag)" = "1.2.3-ppv9.9.9-rhel9-build" ] || fail "build image tag $(build_build_image_tag)"
   [ "$(build_dev_tag)" = "1.2.3-ppv9.9.9-rhel9-dev-mhamill" ] || fail "dev tag $(build_dev_tag)"
   [ "$(build_dev_sha_tag)" = "1.2.3-ppv9.9.9-rhel9-dev-mhamill-a1b2c3d4" ] || fail "sha tag $(build_dev_sha_tag)"
 )
@@ -82,6 +83,16 @@ grep -q "RHEL version: ${RHEL_VERSION}" "$tmp/check.out" || fail "check did not 
 grep -q "wireshark-${WIRESHARK_VERSION}" "$tmp/check.out" || fail "check did not resolve wireshark-\$WIRESHARK_VERSION"
 grep -q "src/build/rhel${RHEL_VERSION}/wireshark" "$tmp/check.out" || fail "check did not use src/build"
 
+(
+  # shellcheck disable=SC1091
+  source "$root/src/scripts/lib/build-config.sh"
+  build_load_versions 9
+  expected="${WIRESHARK_VERSION}-ppv${PACKET_PENGUIN_VERSION}-rhel${RHEL_VERSION}"
+  [ "$(build_release_tag)" = "$expected" ] || fail "release tag does not follow the versions file: $(build_release_tag)"
+  [ "$(build_build_image_tag)" = "${expected}-build" ] || fail "build image tag does not follow the versions file: $(build_build_image_tag)"
+  [ "$ARTIFACTORY_RPM_REPOSITORY" = "tahaa-rpm-local" ] || fail "rpm repository is $ARTIFACTORY_RPM_REPOSITORY"
+)
+
 if "$root/src/scripts/compile-wireshark.sh" --rhel 8 --check >"$tmp/rhel8.out" 2>&1; then
   fail "RHEL 8 was accepted"
 fi
@@ -97,6 +108,29 @@ grep -q 'not supported' "$tmp/rhel8.out" || fail "RHEL 8 failure did not explain
   printf '%s\n' "$release_out" | grep -q 'protected Git ref' || fail "release guard said: $release_out"
   if printf '%s\n' "$release_out" | grep -q 'login'; then
     fail "release guard reached registry login: $release_out"
+  fi
+)
+
+(
+  export BUILD_ROOT="$tmp/publish-build"
+  set +e
+  dev_rpm="$(BUILD_TYPE=dev "$root/src/scripts/publish-rpm.sh" 2>&1)"
+  dev_rpm_status=$?
+  set -e
+  [ "$dev_rpm_status" -ne 0 ] || fail "dev RPM publish was accepted"
+  printf '%s\n' "$dev_rpm" | grep -q 'only for BUILD_TYPE=release' || fail "dev RPM publish said: $dev_rpm"
+  if printf '%s\n' "$dev_rpm" | grep -q 'https://'; then
+    fail "dev RPM publish reached Artifactory: $dev_rpm"
+  fi
+
+  set +e
+  release_rpm="$(ARTIFACTORY_USERNAME=user ARTIFACTORY_PASSWORD=secret BUILD_TYPE=release "$root/src/scripts/publish-rpm.sh" 2>&1)"
+  release_rpm_status=$?
+  set -e
+  [ "$release_rpm_status" -ne 0 ] || fail "unprotected RPM publish was accepted"
+  printf '%s\n' "$release_rpm" | grep -q 'protected Git ref' || fail "RPM release guard said: $release_rpm"
+  if printf '%s\n' "$release_rpm" | grep -q 'https://'; then
+    fail "unprotected RPM publish reached Artifactory: $release_rpm"
   fi
 )
 

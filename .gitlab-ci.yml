@@ -1,11 +1,16 @@
 # RHEL 9 build. The runner must already have the compile image loaded
 # (docker load). Pulling a public image is not required.
 #
-# Development pipelines publish:
-#   <version>-ppv<plugin>-rhel9-dev-<user>
-#   <version>-ppv<plugin>-rhel9-dev-<user>-<sha>
-# Release pipelines publish the tag without -dev, and only from the matching
-# protected Git tag. A BUILD_TYPE variable by itself cannot publish a release.
+# BUILD_TYPE defaults to dev. A dev pipeline publishes development image
+# tags only. It does not publish the release images or the RPM.
+#
+# BUILD_TYPE=release publishes, from versions/RHEL9.env:
+#   oci://<registry>/<image-repo>/<image>:<version>-ppv<plugin>-rhel<rhel>
+#   oci://<registry>/<image-repo>/<image>:<version>-ppv<plugin>-rhel<rhel>-build
+#   the RPM into <registry>/artifactory/<rpm-repo>/
+# Docker pushes the same image names without the oci:// scheme.
+# Release publish also requires the matching protected Git tag.
+# A BUILD_TYPE variable by itself cannot publish a release.
 
 stages:
   - validate
@@ -25,7 +30,7 @@ variables:
     options:
       - "dev"
       - "release"
-    description: "Select development or official release build"
+    description: "dev is the default. release publishes the release images and the RPM from the protected Git tag"
   ARTIFACTORY_REGISTRY: artifactory.tahaa.local
   ARTIFACTORY_REPOSITORY: tahaa-image-local
 
@@ -126,7 +131,10 @@ docker-image:
 
 publish:
   stage: publish
-  needs: ["docker-image"]
+  needs:
+    - job: docker-image
+    - job: rpm
+      artifacts: true
   resource_group: wireshark-artifactory
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
@@ -140,6 +148,10 @@ publish:
       command -v docker >/dev/null 2>&1 || { echo "docker is required to publish" >&2; exit 1; }
       docker load -i src/artifacts/wireshark-image.tar
     - ./src/scripts/publish-image.sh
+    - |
+      if [ "${BUILD_TYPE}" = release ]; then
+        ./src/scripts/publish-rpm.sh
+      fi
     - ./src/scripts/write-build-metadata.sh
   artifacts:
     paths:
