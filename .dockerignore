@@ -3,7 +3,9 @@ build
 install
 images
 # Compile outputs. docker compose mounts the workstation src tree over /src,
-# so these stay out of the image copied by dockerfile/Dockerfile.wireshark-ubi9-build.
+# so the build tree stays out of dockerfile/Dockerfile.wireshark-ubi9-build.
+# src/artifacts stays in the context. The runtime image copies the RPM from
+# src/artifacts/rpms. Delete that RPM before building the compile image when
+# it should not be copied into wireshark-ubi9:dev.
 src/build
-src/artifacts
 src/wireshark-*/build
