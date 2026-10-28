@@ -6,7 +6,7 @@ The image installs its RPMs from UBI 9.8 and from the RHEL 9 repositories on Sat
 
 ## Base image
 
-`images/ubi9-ubi-9.8.tar.gz` is an archive of the public `registry.access.redhat.com/ubi9/ubi:9.8` image (`sha256:16e9e43d99e181463513cc84a514859b1abb9460f1c4d9e208da4b4e51cd5cc3`). The Wireshark Dockerfile does not use that image. Its base is `artifactory.tahaa.local/tahaa-image-local/ubi9-tahaa-bootstrap:9.8`. Load the public archive only when you need that UBI image locally:
+`images/ubi9-ubi-9.8.tar.gz` is an archive of the public `registry.access.redhat.com/ubi9/ubi:9.8` image (`sha256:16e9e43d99e181463513cc84a514859b1abb9460f1c4d9e208da4b4e51cd5cc3`). The Wireshark Dockerfile does not use that image. Its base is `artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap:9.8`. Load the public archive only when you need that UBI image locally:
 
 ```bash
 ./src/scripts/load-ubi-image.sh
@@ -16,7 +16,7 @@ The load script checks the archive checksum and the image id, then loads the arc
 
 ## Compile image
 
-Build on the isolated network, where `artifactory.tahaa.local/tahaa-image-local/ubi9-tahaa-bootstrap:9.8` is already loaded or reachable. The image stays in the local Docker store. The bootstrap image carries the RHEL 9 repositories. speexdsp, libpcap, Lua, and Ninja come from CodeReady Builder when that repository is present in the bootstrap. Use Docker for this build.
+Build on the isolated network, where `artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap:9.8` is already loaded or reachable. The image stays in the local Docker store. The bootstrap image carries the RHEL 9 repositories. speexdsp, libpcap, Lua, and Ninja come from CodeReady Builder when that repository is present in the bootstrap. Use Docker for this build.
 
 `satellite9b.hsv.local` is the Satellite server those repositories use. The build only pulls packages from it. The build container does not resolve that name, so pass it on the command line. `--add-host` is local to that build.
 
