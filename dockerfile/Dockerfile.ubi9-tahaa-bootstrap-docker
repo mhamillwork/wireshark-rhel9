@@ -1,0 +1,40 @@
+# GitLab job image, tagged
+# artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap-docker:9.8.
+#
+#   docker build --add-host satellite9b.hsv.local:10.10.106.59 \
+#     -f dockerfile/Dockerfile.ubi9-tahaa-bootstrap-docker \
+#     -t artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap-docker:9.8 .
+#
+# The base is ubi9-tahaa-bootstrap. This image adds the Docker client and
+# the packages a GitLab job needs to check out the repository. The Docker
+# engine stays on the runner. Mount /var/run/docker.sock into the job so
+# the client uses that engine. The compile and runtime images do not use
+# this image as their base.
+
+ARG BOOTSTRAP_IMAGE=artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap:9.8
+
+FROM ${BOOTSTRAP_IMAGE}
+
+RUN printf 'assumeyes=1\nmax_parallel_downloads=10\ntsflags=nodocs\ninstall_weak_deps=0\n' >> /etc/dnf/dnf.conf \
+    && if [ -e /etc/rhsm-host ]; then rm -rf /etc/rhsm-host; fi \
+    && if [ -f /etc/yum.repos.d/ubi.repo ]; then sed -i '/^enabled=/a priority=1' /etc/yum.repos.d/ubi.repo; fi \
+    && bash -c 'set -euo pipefail; \
+        dnf -y install \
+          ca-certificates \
+          git \
+          gzip \
+          tar; \
+        if dnf -q repoquery --qf "%{name}\n" docker-ce-cli | grep -qx docker-ce-cli; then \
+          dnf -y install docker-ce-cli; \
+        elif dnf -q repoquery --qf "%{name}\n" docker | grep -qx docker; then \
+          dnf -y install docker; \
+        else \
+          echo "docker-ce-cli is not in the enabled repositories" >&2; \
+          exit 1; \
+        fi; \
+        command -v docker; \
+        docker --version; \
+        dnf clean all; \
+        rm -rf /var/cache/dnf'
+
+CMD ["bash"]

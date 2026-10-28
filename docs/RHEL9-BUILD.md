@@ -79,6 +79,15 @@ rpm -qpl src/artifacts/rpms/rhel9/*.rpm
 
 The compile image and the runtime image are separate Dockerfiles. They share the bootstrap `artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap:9.8`, which already has the isolated-network certificates and repositories. They do not inherit each other: the published image does not contain the compiler. Do not turn TLS verification off.
 
+`dockerfile/Dockerfile.ubi9-tahaa-bootstrap-docker` is the GitLab job image. It starts FROM that bootstrap and installs the Docker client, git, and the archive tools the runner uses. The tag is `artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap-docker:9.8`. The engine stays on the runner.
+
+```bash
+docker build \
+  --add-host satellite9b.hsv.local:10.10.106.59 \
+  -f dockerfile/Dockerfile.ubi9-tahaa-bootstrap-docker \
+  -t artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap-docker:9.8 .
+```
+
 `dockerfile/Dockerfile.wireshark-ubi9-build` is the compile image, tagged `wireshark-ubi9:dev`. `docker compose up` uses that image. It does not require the runtime image to exist.
 
 `dockerfile/Dockerfile.wireshark-ubi9-runtime` is the image that gets published. It installs the RPM from `src/artifacts/rpms/rhel9/` and the packages the GUI needs on top of what the RPM requires. `install_weak_deps=0` drops recommended plugins, so the file names `qt5-qtbase-gui` (the xcb platform plugin `libqxcb.so`), `qt5-qtsvg`, `qt5-qtmultimedia`, `qt5-qtimageformats`, DejaVu fonts, fontconfig, the X11 and xcb libraries, `libxkbcommon-x11`, `mesa-libGL`, the icon theme, `dbus-libs`, and `glib2`. The image sets `QT_X11_NO_MITSHM=1` and `XDG_RUNTIME_DIR`. It does not set `DISPLAY` or `QT_QPA_PLATFORM`. Its command is `/usr/local/bin/wireshark`. Build it on the isolated network. `dnf` uses `satellite9b.hsv.local`, and the build container does not resolve that name, so the command passes the host mapping.
