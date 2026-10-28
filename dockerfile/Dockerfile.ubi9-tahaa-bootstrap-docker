@@ -5,28 +5,29 @@
 #     -f dockerfile/Dockerfile.ubi9-tahaa-bootstrap-docker \
 #     -t artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap-docker:9.8 .
 #
-# The base is ubi9-tahaa-bootstrap. This image adds the Docker client,
-# dockerd, and the packages a GitLab job needs to check out the repository.
-# Job containers use the client. A privileged Deployment runs dockerd from
-# this same image; see k8s/wireshark-docker.yaml. The image command stays
-# bash, so a job does not start the engine. The compile and runtime images
-# do not use this image as their base.
-#
-# The distro package named docker stores images under /var/lib/containers
-# and mounts them with fuse-overlayfs. This image does not install that
-# package. Satellite has to provide docker-ce, docker-ce-cli, and containerd.io.
-# The install script enables CodeReady Builder and any repo id containing
-# docker. An existing /usr/bin/docker from another package is removed first
-# so it cannot block docker-ce-cli. A build log that quotes the old
-# dnf.conf edit is from the previous Dockerfile.
+# The base is ubi9-tahaa-bootstrap. This image adds the Docker client and
+# the packages a GitLab job needs to check out the repository. The Docker
+# engine stays on the runner. Mount /var/run/docker.sock into the job so
+# the client uses that engine. The compile and runtime images do not use
+# this image as their base.
 
 ARG BOOTSTRAP_IMAGE=artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap:9.8
 
 FROM ${BOOTSTRAP_IMAGE}
 
-COPY src/scripts/install-job-image-packages.sh /tmp/install-job-image-packages.sh
-
-RUN bash /tmp/install-job-image-packages.sh \
-    && rm -f /tmp/install-job-image-packages.sh
+# docker-ce-cli is the Docker client. The engine stays on the runner and is
+# reached through the mounted socket. install_weak_deps=0 keeps that engine
+# out of this image. The distro package named docker stores images under
+# /var/lib/containers and mounts them with fuse-overlayfs, which fails when
+# /dev/fuse is absent, so this image does not install it.
+RUN printf 'assumeyes=1\nmax_parallel_downloads=10\ntsflags=nodocs\ninstall_weak_deps=0\n' >> /etc/dnf/dnf.conf \
+    && if [ -e /etc/rhsm-host ]; then rm -rf /etc/rhsm-host; fi \
+    && if [ -f /etc/yum.repos.d/ubi.repo ]; then sed -i '/^enabled=/a priority=1' /etc/yum.repos.d/ubi.repo; fi \
+    && dnf -y install ca-certificates git gzip tar docker-ce-cli \
+    && command -v docker \
+    && docker --version | grep -q '^Docker version ' \
+    && dnf clean all \
+    && rm -rf /var/cache/dnf \
+    && ln -sfn /run/secrets/rhsm /etc/rhsm-host
 
 CMD ["bash"]
