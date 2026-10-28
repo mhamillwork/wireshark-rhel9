@@ -60,9 +60,24 @@ grep -q 'artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap:9.8
 grep -q 'artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap-docker:9.8' .gitlab-ci.yml || build_fail "GitLab job image is not the bootstrap image with the docker client"
 grep -q 'artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap:9.8' dockerfile/Dockerfile.ubi9-tahaa-bootstrap-docker || build_fail "job image Dockerfile does not start from the bootstrap image"
 grep -q 'docker-ce-cli' dockerfile/Dockerfile.ubi9-tahaa-bootstrap-docker || build_fail "job image Dockerfile does not install the Docker client"
+grep -qE '^[[:space:]]+docker-ce[[:space:]]*\\$' dockerfile/Dockerfile.ubi9-tahaa-bootstrap-docker || build_fail "job image Dockerfile does not install docker-ce"
+grep -qE '^[[:space:]]+containerd\.io[[:space:]]*\\$' dockerfile/Dockerfile.ubi9-tahaa-bootstrap-docker || build_fail "job image Dockerfile does not install containerd.io"
+grep -q 'command -v dockerd' dockerfile/Dockerfile.ubi9-tahaa-bootstrap-docker || build_fail "job image Dockerfile does not check for dockerd"
 if grep -q 'install docker;' dockerfile/Dockerfile.ubi9-tahaa-bootstrap-docker || grep -q 'install docker ' dockerfile/Dockerfile.ubi9-tahaa-bootstrap-docker; then
   build_fail "job image Dockerfile installs the distro docker package"
 fi
+grep -q 'DOCKER_HOST: tcp://wireshark-docker:2375' .gitlab-ci.yml || build_fail "GitLab DOCKER_HOST is not the in-cluster engine"
+grep -q 'DOCKER_TLS_CERTDIR: ""' .gitlab-ci.yml || build_fail "GitLab DOCKER_TLS_CERTDIR is not empty"
+grep -q 'DOCKER_BUILDKIT: "0"' .gitlab-ci.yml || build_fail "GitLab does not pin the engine's built-in builder"
+[ -f k8s/wireshark-docker.yaml ] || build_fail "k8s/wireshark-docker.yaml is missing"
+grep -q 'artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap-docker:9.8' k8s/wireshark-docker.yaml || build_fail "engine manifest image is not the job image"
+grep -q 'privileged: true' k8s/wireshark-docker.yaml || build_fail "engine manifest is not privileged"
+grep -q 'dockerd' k8s/wireshark-docker.yaml || build_fail "engine manifest does not run dockerd"
+grep -q 'tcp://0.0.0.0:2375' k8s/wireshark-docker.yaml || build_fail "engine manifest does not listen on 2375"
+grep -q '/var/lib/docker' k8s/wireshark-docker.yaml || build_fail "engine manifest does not keep images on the volume"
+grep -q 'type: Recreate' k8s/wireshark-docker.yaml || build_fail "engine manifest does not recreate the single replica"
+grep -q 'docker cp' src/scripts/run-compile-image.sh || build_fail "remote daemon path does not copy the checkout"
+grep -q '/workspace' src/scripts/run-compile-image.sh || build_fail "remote daemon path does not use /workspace"
 grep -q 'qt5-qtbase-gui' dockerfile/Dockerfile.wireshark-ubi9-runtime || build_fail "runtime image is missing the Qt xcb platform package"
 grep -q 'QT_X11_NO_MITSHM=1' dockerfile/Dockerfile.wireshark-ubi9-runtime || build_fail "runtime image is missing QT_X11_NO_MITSHM"
 grep -q '/usr/local/bin/wireshark' dockerfile/Dockerfile.wireshark-ubi9-runtime || build_fail "runtime image command is not the Wireshark GUI"
@@ -85,6 +100,7 @@ fi
 
 "$root/tests/test-build-config.sh"
 "$root/tests/test-intree-plugins.sh"
+"$root/tests/test-run-compile-image.sh"
 if command -v rpmbuild >/dev/null 2>&1; then
   "$root/tests/test-rpm-metadata.sh"
 else
