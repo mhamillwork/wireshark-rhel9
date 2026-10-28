@@ -15,6 +15,9 @@
 # The distro package named docker stores images under /var/lib/containers
 # and mounts them with fuse-overlayfs. This image does not install that
 # package. Satellite has to provide docker-ce, docker-ce-cli, and containerd.io.
+# CodeReady Builder and any repo id containing docker are enabled for that
+# transaction. An existing /usr/bin/docker from another package is removed
+# first so it cannot block docker-ce-cli.
 
 ARG BOOTSTRAP_IMAGE=artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap:9.8
 
@@ -24,22 +27,55 @@ FROM ${BOOTSTRAP_IMAGE}
 # and containerd.io are named so the client and dockerd are both present.
 RUN printf 'assumeyes=1\nmax_parallel_downloads=10\ntsflags=nodocs\ninstall_weak_deps=0\n' >> /etc/dnf/dnf.conf \
     && if [ -e /etc/rhsm-host ]; then rm -rf /etc/rhsm-host; fi \
-    && if [ -f /etc/yum.repos.d/ubi.repo ]; then sed -i '/^enabled=/a priority=1' /etc/yum.repos.d/ubi.repo; fi \
-    && dnf -y install \
-        ca-certificates \
-        git \
-        gzip \
-        tar \
-        docker-ce \
-        docker-ce-cli \
-        containerd.io \
-    && command -v docker \
-    && command -v dockerd \
-    && command -v containerd \
-    && docker --version | grep -q '^Docker version ' \
-    && dockerd --version \
-    && dnf clean all \
-    && rm -rf /var/cache/dnf \
-    && ln -sfn /run/secrets/rhsm /etc/rhsm-host
+    && if [ -f /etc/yum.repos.d/ubi.repo ]; then sed -i '/^enabled=/a priority=1' /etc/yum.repos.d/ubi.repo; fi
+
+# The package transaction is its own step so a failure is the dnf command.
+# Repo ids are read from a file. A pipeline into grep -q exits early and
+# fails the step when pipefail is on, even though the repo name was found.
+RUN bash -c 'set -euo pipefail; \
+    dnf repolist --all > /tmp/repolist.txt; \
+    cut -d" " -f1 /tmp/repolist.txt > /tmp/repo-ids.txt; \
+    repos=(); \
+    for repo in ubi-9-codeready-builder-rpms "codeready-builder-for-rhel-9-$(uname -m)-rpms"; do \
+      if grep -qx "$repo" /tmp/repo-ids.txt; then \
+        repos+=("--enablerepo=${repo}"); \
+      fi; \
+    done; \
+    while read -r id; do \
+      case "$id" in \
+        *docker*) repos+=("--enablerepo=${id}") ;; \
+      esac; \
+    done < /tmp/repo-ids.txt; \
+    if rpm -q --whatprovides /usr/bin/docker >/dev/null 2>&1; then \
+      rpm -q --qf "%{NAME}\n" --whatprovides /usr/bin/docker > /tmp/docker-providers; \
+      while read -r provider; do \
+        case "$provider" in \
+          ""|docker-ce|docker-ce-cli|containerd.io) ;; \
+          *) echo "Removing ${provider}, which provides /usr/bin/docker"; dnf -y remove "$provider" ;; \
+        esac; \
+      done < /tmp/docker-providers; \
+    fi; \
+    echo "Enabling repos: ${repos[*]:-none}"; \
+    if ! dnf -y install "${repos[@]}" \
+      ca-certificates \
+      git \
+      gzip \
+      tar \
+      docker-ce \
+      docker-ce-cli \
+      containerd.io \
+    ; then \
+      echo "Satellite did not install docker-ce, docker-ce-cli, and containerd.io" >&2; \
+      exit 1; \
+    fi; \
+    command -v docker; \
+    command -v dockerd; \
+    command -v containerd; \
+    docker --version > /tmp/docker-client-version; \
+    grep -q "^Docker version " /tmp/docker-client-version; \
+    dockerd --version; \
+    dnf clean all; \
+    rm -rf /var/cache/dnf /tmp/repolist.txt /tmp/repo-ids.txt /tmp/docker-providers /tmp/docker-client-version; \
+    ln -sfn /run/secrets/rhsm /etc/rhsm-host'
 
 CMD ["bash"]
