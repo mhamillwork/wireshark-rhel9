@@ -16,11 +16,12 @@
 #
 # The pod is privileged so dockerd can mount overlay2 and load the netfilter
 # modules. Before dockerd starts, the command enables cgroup v2 controllers,
-# tries an overlay mount on the volume, and picks an iptables command that
-# can open the nat table. The volume has to be a block filesystem such as
-# ext4 or xfs. NFS cannot host overlay2. IPv6 iptables stay off. The IPv4
-# rules stay in the pod network namespace. /lib/modules comes from the node
-# so modprobe can load iptable_nat.
+# tries an overlay mount on the volume, and tries to create the DOCKER nat
+# chain. When that chain cannot be created, dockerd starts with iptables
+# disabled so the bridge driver still registers. Image builds then use the
+# pod network. The volume has to be a block filesystem such as ext4 or xfs.
+# NFS cannot host overlay2. IPv6 iptables stay off. /lib/modules comes from
+# the node so modprobe can load iptable_nat.
 # The Service is ClusterIP with no TLS. Leave it inside the cluster. Job pods
 # in gitlab use DOCKER_HOST=tcp://wireshark-docker:2375.
 #
@@ -100,34 +101,48 @@ spec:
                   modprobe "$module" 2>/dev/null || echo "kernel module ${module} was not loaded" >&2
                 done
               fi
-              nat_table_opens() { "$1" -t nat -L -n >/dev/null 2>&1; }
+              nat_chain_creates() {
+                local err
+                err="$(mktemp)"
+                if "$1" -t nat -N DOCKER >"$err" 2>&1; then
+                  rm -f "$err"
+                  return 0
+                fi
+                if grep -q 'already exists' "$err"; then
+                  rm -f "$err"
+                  return 0
+                fi
+                echo "iptables candidate $1 could not create the DOCKER nat chain:" >&2
+                cat "$err" >&2
+                rm -f "$err"
+                return 1
+              }
               chosen=""
               for candidate in iptables-nft iptables-legacy iptables; do
-                if command -v "$candidate" >/dev/null 2>&1 && nat_table_opens "$candidate"; then
+                if command -v "$candidate" >/dev/null 2>&1 && nat_chain_creates "$candidate"; then
                   chosen="$candidate"
                   break
                 fi
               done
-              if [ -z "$chosen" ]; then
-                echo "iptables cannot open the nat table, so dockerd cannot create the DOCKER chain. The node needs the iptable_nat or nf_tables module." >&2
-                iptables -t nat -L -n >&2 || true
-                iptables-nft -t nat -L -n >&2 || true
-                iptables-legacy -t nat -L -n >&2 || true
-                exit 1
+              iptables_arg="--iptables=false"
+              if [ -n "$chosen" ]; then
+                mkdir -p /usr/local/sbin
+                target="$(command -v "$chosen")"
+                ln -sfn "$target" /usr/local/sbin/iptables
+                if [ "$target" != /usr/sbin/iptables ]; then
+                  ln -sfn "$target" /usr/sbin/iptables
+                fi
+                case "$chosen" in
+                  iptables-nft) ln -sfn "$(command -v ip6tables-nft)" /usr/local/sbin/ip6tables 2>/dev/null || true ;;
+                  iptables-legacy) ln -sfn "$(command -v ip6tables-legacy)" /usr/local/sbin/ip6tables 2>/dev/null || true ;;
+                esac
+                export PATH="/usr/local/sbin:${PATH}"
+                iptables_arg="--iptables=true"
+                echo "using ${chosen} for the DOCKER nat chain"
+              else
+                echo "Starting dockerd with --iptables=false. The DOCKER nat chain cannot be created in this pod. Image builds use the pod network." >&2
               fi
-              mkdir -p /usr/local/sbin
-              target="$(command -v "$chosen")"
-              ln -sfn "$target" /usr/local/sbin/iptables
-              if [ "$target" != /usr/sbin/iptables ]; then
-                ln -sfn "$target" /usr/sbin/iptables
-              fi
-              case "$chosen" in
-                iptables-nft) ln -sfn "$(command -v ip6tables-nft)" /usr/local/sbin/ip6tables 2>/dev/null || true ;;
-                iptables-legacy) ln -sfn "$(command -v ip6tables-legacy)" /usr/local/sbin/ip6tables 2>/dev/null || true ;;
-              esac
-              echo "using ${chosen} for the DOCKER nat chain"
-              export PATH="/usr/local/sbin:${PATH}"
-              exec dockerd --host=tcp://0.0.0.0:2375 --iptables=true --ip6tables=false --storage-driver=overlay2 --data-root=/var/lib/docker --exec-opt native.cgroupdriver=cgroupfs
+              exec dockerd --host=tcp://0.0.0.0:2375 "$iptables_arg" --ip6tables=false --storage-driver=overlay2 --data-root=/var/lib/docker --exec-opt native.cgroupdriver=cgroupfs
           securityContext:
             privileged: true
           ports:

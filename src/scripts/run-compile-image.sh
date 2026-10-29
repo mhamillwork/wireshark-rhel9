@@ -79,7 +79,7 @@ run_remote() {
   # shellcheck disable=SC2064
   trap "docker rm -f '$name' >/dev/null 2>&1 || true" RETURN
   docker rm -f "$name" >/dev/null 2>&1 || true
-  docker create --name "$name" --entrypoint bash "$image" \
+  docker create --name "$name" --network=host --entrypoint bash "$image" \
     -c 'mkdir -p /workspace && exec sleep infinity' >/dev/null
   docker start "$name" >/dev/null
   wait_for_workspace "$name"
