@@ -55,6 +55,7 @@ if ! dnf -y \
   gzip \
   tar \
   iptables \
+  openssl \
   docker-ce \
   docker-ce-cli \
   containerd.io

@@ -44,9 +44,12 @@ stages:
 
 variables:
   BOOTSTRAP_IMAGE: artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap-docker:9.8
-  # In-cluster engine from k8s/wireshark-docker.yaml. No TLS on this port.
+  # In-cluster engine from k8s/wireshark-docker.yaml. TLS is required once
+  # the job image contains /etc/docker/tls. before_script drops it when the
+  # running engine is still the plaintext one.
   DOCKER_HOST: tcp://wireshark-docker:2375
-  DOCKER_TLS_CERTDIR: ""
+  DOCKER_TLS_VERIFY: "1"
+  DOCKER_CERT_PATH: /etc/docker/tls
   DOCKER_BUILDKIT: "0"
   WIRESHARK_IMAGE: wireshark-ubi9:dev
   # Runtime image. A separate tag so the build does not replace the compile image.
@@ -65,6 +68,12 @@ default:
     name: $BOOTSTRAP_IMAGE
     entrypoint: [""]
   interruptible: true
+  before_script:
+    - |
+      if [ ! -f /etc/docker/tls/ca.pem ]; then
+        unset DOCKER_TLS_VERIFY
+        unset DOCKER_CERT_PATH
+      fi
 
 compile-image:
   stage: image
