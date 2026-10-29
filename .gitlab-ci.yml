@@ -96,7 +96,6 @@ compile:
     - ./src/scripts/run-compile-image.sh ./src/scripts/compile-wireshark.sh --rhel 9 --build
   artifacts:
     paths:
-      - src/build/rhel9/wireshark/run/
       - src/build/rhel9/logs/
     expire_in: 7 days
 
@@ -119,7 +118,6 @@ rpm:
     paths:
       - src/artifacts/rpms/rhel9/
       - src/build/rhel9/logs/
-      - src/build/rhel9/staging/
     expire_in: 14 days
 
 package-test:
@@ -164,12 +162,9 @@ docker-image:
       # binaries are checked with the offscreen Qt platform.
       docker run --rm -e QT_QPA_PLATFORM=offscreen "${LOCAL_IMAGE}" /usr/local/bin/tshark -v
       docker run --rm -e QT_QPA_PLATFORM=offscreen "${LOCAL_IMAGE}" /usr/local/bin/wireshark --version
-      mkdir -p src/artifacts
-      docker save -o src/artifacts/wireshark-image.tar "${LOCAL_IMAGE}"
   artifacts:
     paths:
       - src/artifacts/build-metadata.json
-      - src/artifacts/wireshark-image.tar
     expire_in: 7 days
 
 publish:
@@ -190,7 +185,7 @@ publish:
       set -euo pipefail
       unset DOCKER_TLS_VERIFY DOCKER_CERT_PATH DOCKER_BUILDKIT
       command -v docker >/dev/null 2>&1 || { echo "docker is required to publish" >&2; exit 1; }
-      docker load -i src/artifacts/wireshark-image.tar
+      docker image inspect "${LOCAL_IMAGE}" >/dev/null 2>&1 || { echo "runtime image ${LOCAL_IMAGE} is not on this Docker daemon" >&2; exit 1; }
     - ./src/scripts/publish-image.sh
     - |
       if [ "${BUILD_TYPE}" = release ]; then
@@ -201,3 +196,21 @@ publish:
     paths:
       - src/artifacts/build-metadata.json
     expire_in: 30 days
+
+cleanup-workspace:
+  stage: publish
+  needs:
+    - job: package-test
+      optional: true
+    - job: docker-image
+      optional: true
+    - job: publish
+      optional: true
+  when: always
+  allow_failure: true
+  script:
+    - |
+      unset DOCKER_TLS_VERIFY DOCKER_CERT_PATH DOCKER_BUILDKIT
+      if command -v docker >/dev/null 2>&1; then
+        docker volume rm -f "wireshark-${CI_PIPELINE_ID}" || true
+      fi
