@@ -94,49 +94,34 @@ compile:
   needs: ["validate"]
   script:
     - ./src/scripts/run-compile-image.sh ./src/scripts/compile-wireshark.sh --rhel 9 --build
-  artifacts:
-    paths:
-      - src/build/rhel9/logs/
-    expire_in: 7 days
 
 test-compile:
   stage: test
   needs: ["compile"]
   script:
     - ./src/scripts/run-compile-image.sh ./src/scripts/compile-wireshark.sh --rhel 9 --test
-  artifacts:
-    paths:
-      - src/build/rhel9/logs/
-    expire_in: 7 days
 
 rpm:
   stage: rpm
   needs: ["test-compile"]
   script:
     - ./src/scripts/run-compile-image.sh ./src/scripts/compile-wireshark.sh --rhel 9 --package
-  artifacts:
-    paths:
-      - src/artifacts/rpms/rhel9/
-      - src/build/rhel9/logs/
-    expire_in: 14 days
 
 package-test:
   stage: package-test
   needs: ["rpm"]
   script:
     - ./src/scripts/run-compile-image.sh ./src/scripts/test-rpm.sh
-  artifacts:
-    paths:
-      - src/build/rhel9/logs/package-test.txt
-    expire_in: 14 days
 
 docker-image:
   stage: docker
   needs:
     - job: package-test
+      artifacts: false
     - job: rpm
-      artifacts: true
+      artifacts: false
   script:
+    - ./src/scripts/run-compile-image.sh true
     - ./src/scripts/write-build-metadata.sh
     - test -n "$(find src/artifacts/rpms/rhel9 -name '*.rpm' -print -quit)"
     - |
@@ -162,17 +147,14 @@ docker-image:
       # binaries are checked with the offscreen Qt platform.
       docker run --rm -e QT_QPA_PLATFORM=offscreen "${LOCAL_IMAGE}" /usr/local/bin/tshark -v
       docker run --rm -e QT_QPA_PLATFORM=offscreen "${LOCAL_IMAGE}" /usr/local/bin/wireshark --version
-  artifacts:
-    paths:
-      - src/artifacts/build-metadata.json
-    expire_in: 7 days
 
 publish:
   stage: publish
   needs:
     - job: docker-image
+      artifacts: false
     - job: rpm
-      artifacts: true
+      artifacts: false
   resource_group: wireshark-artifactory
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
@@ -186,16 +168,13 @@ publish:
       unset DOCKER_TLS_VERIFY DOCKER_CERT_PATH DOCKER_BUILDKIT
       command -v docker >/dev/null 2>&1 || { echo "docker is required to publish" >&2; exit 1; }
       docker image inspect "${LOCAL_IMAGE}" >/dev/null 2>&1 || { echo "runtime image ${LOCAL_IMAGE} is not on this Docker daemon" >&2; exit 1; }
+    - ./src/scripts/run-compile-image.sh true
     - ./src/scripts/publish-image.sh
     - |
       if [ "${BUILD_TYPE}" = release ]; then
         ./src/scripts/publish-rpm.sh
       fi
     - ./src/scripts/write-build-metadata.sh
-  artifacts:
-    paths:
-      - src/artifacts/build-metadata.json
-    expire_in: 30 days
 
 cleanup-workspace:
   stage: publish
