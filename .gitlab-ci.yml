@@ -1,14 +1,22 @@
 # RHEL 9 build. The compile-image job builds
 # dockerfile/Dockerfile.wireshark-ubi9-build and tags it wireshark-ubi9:dev.
-# That build reaches Satellite with --add-host. Later jobs docker run that
-# local tag. GitLab does not pull wireshark-ubi9:dev. The job image is
-# ubi9-tahaa-bootstrap-docker, the bootstrap image plus the Docker client.
-# The compile and runtime Dockerfiles still FROM ubi9-tahaa-bootstrap.
+# That build reaches Satellite with --add-host. Later jobs run commands in
+# that local tag through src/scripts/run-compile-image.sh. GitLab does not
+# pull wireshark-ubi9:dev. The job image is ubi9-tahaa-bootstrap-docker.
+# That image has the Docker client and dockerd. The compile and runtime
+# Dockerfiles still FROM ubi9-tahaa-bootstrap.
 #
-# The job needs that client and the engine socket. A shell runner has both
-# on the host. A Docker executor must mount /var/run/docker.sock into the job.
+# Kubernetes nodes do not provide a Docker socket. Apply
+# k8s/wireshark-docker.yaml. Its objects are in the gitlab namespace, with
+# the runner. That Deployment runs dockerd from this same image, privileged,
+# and keeps the local tags on its volume. DOCKER_HOST below points every job
+# at that Service. A shell runner with its own engine overrides DOCKER_HOST
+# to unix:///var/run/docker.sock.
 # compile-image and the jobs that run the compile image must use the same
 # Docker daemon, because the tag stays on that daemon.
+#
+# DOCKER_BUILDKIT=0 uses the engine's built-in builder. The job image does
+# not need a separate buildx package for docker build.
 #
 # Do not set image pull_policy. This runner's allowed_pull_policies list is
 # empty, so a policy in this file is rejected before the job starts.
@@ -36,6 +44,10 @@ stages:
 
 variables:
   BOOTSTRAP_IMAGE: artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap-docker:9.8
+  # In-cluster engine from k8s/wireshark-docker.yaml. No TLS on this port.
+  DOCKER_HOST: tcp://wireshark-docker:2375
+  DOCKER_TLS_CERTDIR: ""
+  DOCKER_BUILDKIT: "0"
   WIRESHARK_IMAGE: wireshark-ubi9:dev
   # Runtime image. A separate tag so the build does not replace the compile image.
   LOCAL_IMAGE: wireshark-ppv:candidate

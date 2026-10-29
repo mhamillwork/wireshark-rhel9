@@ -79,14 +79,27 @@ rpm -qpl src/artifacts/rpms/rhel9/*.rpm
 
 The compile image and the runtime image are separate Dockerfiles. They share the bootstrap `artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap:9.8`, which already has the isolated-network certificates and repositories. They do not inherit each other: the published image does not contain the compiler. Do not turn TLS verification off.
 
-`dockerfile/Dockerfile.ubi9-tahaa-bootstrap-docker` is the GitLab job image. It starts FROM that bootstrap and installs `docker-ce-cli`, git, and the archive tools the runner uses. The tag is `artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap-docker:9.8`. The engine stays on the runner. Build it with Docker Engine. `docker version` has to show a Server section from that engine. A failure from `fuse-overlayfs` while mounting `/var/lib/containers/storage` means the `docker` command on that machine is not Docker Engine.
+`dockerfile/Dockerfile.ubi9-tahaa-bootstrap-docker` is the GitLab job image and the in-cluster engine image. It starts FROM that bootstrap and installs `docker-ce`, `docker-ce-cli`, `containerd.io`, git, and the archive tools the runner uses. The tag is `artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap-docker:9.8`. Build it on a machine whose `docker version` shows a Server section, then push that tag. A failure from `fuse-overlayfs` while mounting `/var/lib/containers/storage` means the `docker` command on that machine is not Docker Engine. If `dnf` reports `No match for argument` for `docker-ce` or `containerd.io`, Satellite does not have Docker Engine yet. The distro package named `docker` is not a substitute. The pipeline does not build this image. Rebuild and push it before applying the engine manifest. The pod exits at startup when that tag does not contain `dockerd`.
 
 ```bash
 docker build \
   --add-host satellite9b.hsv.local:10.10.106.59 \
   -f dockerfile/Dockerfile.ubi9-tahaa-bootstrap-docker \
   -t artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap-docker:9.8 .
+docker push artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap-docker:9.8
 ```
+
+Apply `k8s/wireshark-docker.yaml` after that push. The claim, Deployment, and Service set `namespace: gitlab`, which is where the runner starts job pods. Apply with no `-n` flag. `kubectl apply -n default` overrides the file and creates the objects in `default`. The first command deletes a pod left there by that mistake. The pipeline does not apply the file.
+
+```bash
+kubectl -n default delete deployment,service,pvc wireshark-docker --ignore-not-found
+kubectl apply -f k8s/wireshark-docker.yaml
+kubectl -n gitlab rollout status deployment/wireshark-docker
+```
+
+The Deployment is privileged. Its command enables the cgroup v2 controllers, checks that the volume can mount overlay, and then runs `dockerd --host=tcp://0.0.0.0:2375`. The volume has to be ext4 or xfs. `/var/lib/docker` is a 100Gi volume, so `wireshark-ubi9:dev` is still there for the next job. The claim is read-write once, so the Deployment strategy is Recreate. The Service name is `wireshark-docker`, ClusterIP port 2375, with no TLS. Do not publish that Service outside the cluster. GitLab sets `DOCKER_HOST=tcp://wireshark-docker:2375` and an empty `DOCKER_TLS_CERTDIR`. That short name resolves for job pods in `gitlab`. The pod maps `satellite9b.hsv.local` to `10.10.106.59`. Image builds still pass `--add-host`, because a container started by `dockerd` does not inherit the pod hosts file. A shell runner that already has a local engine overrides `DOCKER_HOST` to `unix:///var/run/docker.sock`.
+
+`src/scripts/run-compile-image.sh` bind-mounts the checkout when `DOCKER_HOST` is a local socket. A `tcp://` daemon resolves that path on the engine pod, so the script copies the checkout to `/workspace` and copies `src/build` and `src/artifacts` back. `docker build` sends its context from the job, so the compile and runtime image builds do not need that copy. `DOCKER_BUILDKIT=0` keeps `docker build` on the engine's built-in builder.
 
 `dockerfile/Dockerfile.wireshark-ubi9-build` is the compile image, tagged `wireshark-ubi9:dev`. `docker compose up` uses that image. It does not require the runtime image to exist.
 
@@ -169,7 +182,7 @@ A release is published only when all of these are true:
 
 Setting `BUILD_TYPE=release` on an ordinary branch does not publish. If a release image tag or the RPM is already in Artifactory, the push stops. Prefer an immutable tag policy in Artifactory as well.
 
-The `compile-image` job runs `docker build` on `dockerfile/Dockerfile.wireshark-ubi9-build` and tags it `wireshark-ubi9:dev`. `--add-host satellite9b.hsv.local:10.10.106.59` lets that build reach Satellite. GitLab job containers use `artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap-docker:9.8`, so the runner pulls that image from Artifactory instead of pulling the local `wireshark-ubi9:dev` tag. The compile and runtime images still build FROM `ubi9-tahaa-bootstrap:9.8`. Validate, compile, test, rpm, and package-test then `docker run` the tag. The pipeline does not set `pull_policy`: this runner's `allowed_pull_policies` list is empty, and a job-level policy is rejected. Those jobs, and a release publish of the compile image, have to land on the same Docker daemon that built the tag. The runner provides the engine through a shell executor, or a Docker executor with `/var/run/docker.sock` mounted. The Docker client is in the job image. The registry must be reachable from the runner, and the runner must trust the Artifactory certificate. Do not disable TLS verification. The rpm job compiles again: the compile job keeps `run/` and the logs, and the package step needs a fresh CMake build in that job.
+The `compile-image` job runs `docker build` on `dockerfile/Dockerfile.wireshark-ubi9-build` and tags it `wireshark-ubi9:dev`. `--add-host satellite9b.hsv.local:10.10.106.59` lets that build reach Satellite. GitLab job containers use `artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap-docker:9.8`, so the runner pulls that image from Artifactory instead of pulling the local `wireshark-ubi9:dev` tag. The compile and runtime images still build FROM `ubi9-tahaa-bootstrap:9.8`. Validate, compile, test, rpm, and package-test then run inside the tag through `src/scripts/run-compile-image.sh`. The pipeline does not set `pull_policy`: this runner's `allowed_pull_policies` list is empty, and a job-level policy is rejected. Those jobs, and a release publish of the compile image, have to use the same `DOCKER_HOST`. On Kubernetes that is the `wireshark-docker` Service from `k8s/wireshark-docker.yaml`. The client is in the job image. The engine pod has to reach Satellite while an image builds, and it has to reach Artifactory when a job pushes. The runner must trust the Artifactory certificate. Do not disable TLS verification for the registry. The engine port itself has no TLS. The rpm job compiles again: the compile job keeps `run/` and the logs, and the package step needs a fresh CMake build in that job.
 
 Merge request pipelines run the checks and do not publish. A branch pipeline publishes the development tags. Release publishing is a separate manual pipeline on the protected Git tag, and a resource group keeps two publishes from pushing at the same time.
 
@@ -183,6 +196,9 @@ Merge request pipelines run the checks and do not publish. A branch pipeline pub
 | `ARTIFACTORY_REPOSITORY` | no | no | Defaults to `tahaa-image-local` |
 | `ARTIFACTORY_RPM_REPOSITORY` | no | no | Defaults to `tahaa-rpm-local`. Used when `BUILD_TYPE=release` |
 | `BUILD_TYPE` | no | no | Defaults to `dev`. `release` publishes the release images and the RPM |
+| `DOCKER_HOST` | no | no | Set in `.gitlab-ci.yml` to `tcp://wireshark-docker:2375`. A shell runner with a local engine overrides this to `unix:///var/run/docker.sock` |
+| `DOCKER_TLS_CERTDIR` | no | no | Set empty. The in-cluster engine port has no TLS |
+| `DOCKER_BUILDKIT` | no | no | Set to `0` so `docker build` uses the engine's built-in builder |
 
 Mask both registry variables. Protect them when development pipelines run on a protected branch such as `main`: a protected variable is not visible to an unprotected branch, so those pipelines cannot log in. A release still cannot be published from a variable alone. It also needs the protected Git tag. The scripts never print the password. `artifacts/build-metadata.json` records versions, commit, pipeline id, and image tag, and does not contain credentials.
 
@@ -201,5 +217,12 @@ Edit `versions/RHEL9.env` and rename `src/wireshark-$WIRESHARK_VERSION` so the d
 - `ninja: error: dependency cycle: .../plugin.c -> .../plugin.c`: `register_plugin_files` was given `plugin.c`, which is the file Wireshark 4.6.9 generates. Pass `${DISSECTOR_SRC}` to that command, and keep `plugin.c` only in `PLUGIN_FILES`. Clean the CMake build directory and compile again.
 - `libwireshark.so.19: cannot open shared object file`: the build-tree binary's RPATH is `$ORIGIN/../lib64` while the libraries are in `run/`. From a checkout whose scripts live in `/src/scripts`, the binary is `/src/build/rhel9/wireshark/run/tshark`. Re-run the compile script so it recreates `src/build/rhel9/wireshark/lib64`, or link the libraries yourself: `mkdir -p /src/build/rhel9/wireshark/lib64` and `ln -sfn "../run/<library>"` for each `lib*.so*` in `run/`. The version check also accepts `LD_LIBRARY_PATH` pointed at `run/`.
 - `rpmbuild is not installed`: rebuild the compile image; `rpm-build` is installed by `dockerfile/Dockerfile.wireshark-ubi9-build`.
-- `docker is required`: the docker and publish jobs need Docker on the runner.
+- `docker is required`: the job image is missing the client, or `PATH` does not include it. The engine is the `wireshark-docker` Service, not a socket on the node.
+- `compile image wireshark-ubi9:dev is not on this Docker daemon`: `compile-image` did not run against this `DOCKER_HOST`, or the engine pod was replaced without its volume.
+- connection refused for `wireshark-docker:2375`: apply `k8s/wireshark-docker.yaml` and wait until the pod is Ready in `gitlab`. That namespace has to allow a privileged pod. `kubectl -n gitlab logs deployment/wireshark-docker` shows why it is not Ready.
+- `dockerd is not in this image`: the pushed tag is still the client-only image. Rebuild and push `dockerfile/Dockerfile.ubi9-tahaa-bootstrap-docker`, then delete the pod so `imagePullPolicy: Always` pulls the new tag.
+- `This volume cannot mount overlay`: the claim is on NFS or another filesystem that cannot host overlay2. Use a storage class that provides ext4 or xfs.
+- the engine pod is in `default`: delete `deployment`, `service`, and `pvc` `wireshark-docker` from `default`, then apply the file again with no `-n` flag. `kubectl apply -n default` overrides `namespace: gitlab`. A volume in `default` does not move to `gitlab`.
+- `job-image: Satellite did not install docker-ce, docker-ce-cli, and containerd.io`: Satellite does not have those packages in an enabled repo or in a repo whose id contains `docker`. The script also enables CodeReady Builder. The distro package named `docker` is not a substitute. A log that still quotes `printf 'assumeyes=1` is the previous Dockerfile; pull and rebuild.
+- `failed to solve` and the command is `bash /tmp/install-job-image-packages.sh`: read the last `job-image:` line. That line is the failure. Lines above it are the `dnf` output.
 - Registry login failed: check the masked variables, DNS for `artifactory.tahaa.local`, and the CA trust. Do not pass `--tls-verify=false`.
