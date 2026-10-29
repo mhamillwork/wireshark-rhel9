@@ -20,9 +20,12 @@ RHEL_VERSION=9
 RPM_PACKAGE_RELEASE=1
 SUPPORTED=1
 EOF
-if VERSIONS_FILE="$tmp/bad.env" bash -c 'source "'"$root"'/src/scripts/lib/build-config.sh"; build_load_versions 9'; then
-  fail "malformed version was accepted"
-fi
+set +e
+bad_out="$(VERSIONS_FILE="$tmp/bad.env" bash -c 'source "'"$root"'/src/scripts/lib/build-config.sh"; build_load_versions 9' 2>&1)"
+bad_status=$?
+set -e
+[ "$bad_status" -ne 0 ] || fail "malformed version was accepted"
+printf '%s\n' "$bad_out" | grep -q 'malformed WIRESHARK_VERSION' || fail "malformed version error was: $bad_out"
 
 set +e
 missing_out="$(VERSIONS_FILE="$tmp/missing.env" bash -c 'source "'"$root"'/src/scripts/lib/build-config.sh"; build_load_versions 9' 2>&1)"
@@ -63,15 +66,18 @@ printf 'cmake_minimum_required(VERSION 3.16)\n' > "$repo/wireshark-1.2.3/CMakeLi
 )
 
 rm -rf "$repo/wireshark-1.2.3"
-if (
-  cd "$repo"
+set +e
+missing_src="$(
+  cd "$repo" || exit 1
   # shellcheck source=/dev/null
   source scripts/lib/build-config.sh
   build_load_versions 9
-  build_resolve_source_dir
-); then
-  fail "missing source directory was accepted"
-fi
+  build_resolve_source_dir 2>&1
+)"
+missing_src_status=$?
+set -e
+[ "$missing_src_status" -ne 0 ] || fail "missing source directory was accepted"
+printf '%s\n' "$missing_src" | grep -q 'Wireshark source directory not found' || fail "missing source error was: $missing_src"
 
 # shellcheck disable=SC1091
 source "$root/versions/RHEL9.env"
@@ -100,14 +106,26 @@ grep -q 'not supported' "$tmp/rhel8.out" || fail "RHEL 8 failure did not explain
 
 (
   export BUILD_ROOT="$tmp/publish-build"
+  # GitLab sets CI_COMMIT_REF_PROTECTED=true for the validate job on main.
+  # Pin both variables so that value cannot skip a guard.
   set +e
-  release_out="$(ARTIFACTORY_USERNAME=user ARTIFACTORY_PASSWORD=secret BUILD_TYPE=release "$root/src/scripts/publish-image.sh" 2>&1)"
+  release_out="$(CI_COMMIT_REF_PROTECTED=false CI_COMMIT_TAG='' ARTIFACTORY_USERNAME=user ARTIFACTORY_PASSWORD=secret BUILD_TYPE=release "$root/src/scripts/publish-image.sh" 2>&1)"
   release_status=$?
   set -e
   [ "$release_status" -ne 0 ] || fail "unprotected release publish was accepted"
   printf '%s\n' "$release_out" | grep -q 'protected Git ref' || fail "release guard said: $release_out"
   if printf '%s\n' "$release_out" | grep -q 'login'; then
     fail "release guard reached registry login: $release_out"
+  fi
+
+  set +e
+  tag_out="$(CI_COMMIT_REF_PROTECTED=true CI_COMMIT_TAG='not-the-release' ARTIFACTORY_USERNAME=user ARTIFACTORY_PASSWORD=secret BUILD_TYPE=release "$root/src/scripts/publish-image.sh" 2>&1)"
+  tag_status=$?
+  set -e
+  [ "$tag_status" -ne 0 ] || fail "release publish with the wrong git tag was accepted"
+  printf '%s\n' "$tag_out" | grep -q 'requires git tag' || fail "tag guard said: $tag_out"
+  if printf '%s\n' "$tag_out" | grep -q 'login'; then
+    fail "tag guard reached registry login: $tag_out"
   fi
 )
 
@@ -124,13 +142,23 @@ grep -q 'not supported' "$tmp/rhel8.out" || fail "RHEL 8 failure did not explain
   fi
 
   set +e
-  release_rpm="$(ARTIFACTORY_USERNAME=user ARTIFACTORY_PASSWORD=secret BUILD_TYPE=release "$root/src/scripts/publish-rpm.sh" 2>&1)"
+  release_rpm="$(CI_COMMIT_REF_PROTECTED=false CI_COMMIT_TAG='' ARTIFACTORY_USERNAME=user ARTIFACTORY_PASSWORD=secret BUILD_TYPE=release "$root/src/scripts/publish-rpm.sh" 2>&1)"
   release_rpm_status=$?
   set -e
   [ "$release_rpm_status" -ne 0 ] || fail "unprotected RPM publish was accepted"
   printf '%s\n' "$release_rpm" | grep -q 'protected Git ref' || fail "RPM release guard said: $release_rpm"
   if printf '%s\n' "$release_rpm" | grep -q 'https://'; then
     fail "unprotected RPM publish reached Artifactory: $release_rpm"
+  fi
+
+  set +e
+  tag_rpm="$(CI_COMMIT_REF_PROTECTED=true CI_COMMIT_TAG='not-the-release' ARTIFACTORY_USERNAME=user ARTIFACTORY_PASSWORD=secret BUILD_TYPE=release "$root/src/scripts/publish-rpm.sh" 2>&1)"
+  tag_rpm_status=$?
+  set -e
+  [ "$tag_rpm_status" -ne 0 ] || fail "RPM publish with the wrong git tag was accepted"
+  printf '%s\n' "$tag_rpm" | grep -q 'requires git tag' || fail "RPM tag guard said: $tag_rpm"
+  if printf '%s\n' "$tag_rpm" | grep -q 'https://'; then
+    fail "RPM tag guard reached Artifactory: $tag_rpm"
   fi
 )
 
