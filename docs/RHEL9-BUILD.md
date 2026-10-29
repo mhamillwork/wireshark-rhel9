@@ -97,6 +97,15 @@ kubectl apply -f k8s/wireshark-docker.yaml -n gitlab
 kubectl -n gitlab rollout status deployment/wireshark-docker
 ```
 
+The node that runs the pod must have `overlay`, `br_netfilter`, and `iptable_nat` loaded. The pod can see `/lib/modules`, and it still fails when those modules are not already loaded on the node. A reboot drops a module that was loaded by hand. Write them where systemd loads modules at boot:
+
+```bash
+printf '%s\n' overlay br_netfilter iptable_nat > /etc/modules-load.d/wireshark-docker.conf
+modprobe overlay
+modprobe br_netfilter
+modprobe iptable_nat
+```
+
 The Deployment is privileged. Its command enables the cgroup v2 controllers, checks that the volume can mount overlay, and starts `dockerd --host=tcp://0.0.0.0:2375 --iptables=false --ip6tables=false`. It does not create the DOCKER nat chain. When the image contains `/etc/docker/tls`, it also passes `--tlsverify`. IPv6 iptables stay off. Image builds and the remote compile container use the pod network, so `dnf` still reaches Satellite. The volume has to be ext4 or xfs. `/var/lib/docker` is a 100Gi volume, so `wireshark-ubi9:dev` is still there for the next job. The claim is read-write once, so the Deployment strategy is Recreate. The Service name is `wireshark-docker`, ClusterIP port 2375. Do not publish that Service outside the cluster. GitLab sets `DOCKER_HOST=tcp://wireshark-docker:2375`, `DOCKER_TLS_VERIFY=1`, and `DOCKER_CERT_PATH=/etc/docker/tls`. That short name resolves for job pods in `gitlab`. The pod maps `satellite9b.hsv.local` to `10.10.106.59`. Image builds still pass `--add-host`, because a container started by `dockerd` does not inherit the pod hosts file. A shell runner that already has a local engine overrides `DOCKER_HOST` to `unix:///var/run/docker.sock`.
 
 `src/scripts/run-compile-image.sh` bind-mounts the checkout when `DOCKER_HOST` is a local socket. A `tcp://` daemon resolves that path on the engine pod, so the script copies the checkout to `/workspace` and copies `src/build` and `src/artifacts` back. `docker build` sends its context from the job, so the compile and runtime image builds do not need that copy. `DOCKER_BUILDKIT=0` keeps `docker build` on the engine's built-in builder.
@@ -222,7 +231,7 @@ Edit `versions/RHEL9.env` and rename `src/wireshark-$WIRESHARK_VERSION` so the d
 - `compile image wireshark-ubi9:dev is not on this Docker daemon`: `compile-image` did not run against this `DOCKER_HOST`, or the engine pod was replaced without its volume.
 - connection refused for `wireshark-docker:2375`: apply `k8s/wireshark-docker.yaml -n gitlab` and wait until the pod is Ready in `gitlab`. That namespace has to allow a privileged pod. `kubectl -n gitlab logs deployment/wireshark-docker` shows why it is not Ready.
 - `dockerd is not in this image`: the pushed tag is still the client-only image. Rebuild and push `dockerfile/Dockerfile.ubi9-tahaa-bootstrap-docker`, then delete the pod so `imagePullPolicy: Always` pulls the new tag.
-- `This volume cannot mount overlay`: the claim is on NFS or another filesystem that cannot host overlay2. Use a storage class that provides ext4 or xfs.
+- `This volume cannot mount overlay` or `kernel module overlay was not loaded`: load `overlay`, `br_netfilter`, and `iptable_nat` on the node and list them in `/etc/modules-load.d/wireshark-docker.conf`. The pod cannot start those modules when the node has not loaded them. An NFS volume also cannot host overlay2.
 - `failed to create NAT chain DOCKER` or `Perhaps iptables or your kernel needs to be upgraded`: the running command still lets dockerd create that chain. Apply `k8s/wireshark-docker.yaml` with `-n gitlab`. The first log line from the new command is `Starting dockerd with --iptables=false`. A log that says `using iptables-nft` or `using iptables-legacy` is the previous command. Delete the deployment in `default` so that copy is not the one restarting.
 - `Binding to an IP address without --tlsverify is deprecated`: rebuild and push `dockerfile/Dockerfile.ubi9-tahaa-bootstrap-docker`, then delete the pod so it pulls the certificates and starts with `--tlsverify`. Until that tag is pushed, the daemon still listens without TLS and Docker slows startup.
 - the engine pod is in `default`: delete `deployment`, `service`, and `pvc` `wireshark-docker` from `default`, then apply with `-n gitlab`. A volume in `default` does not move to `gitlab`.

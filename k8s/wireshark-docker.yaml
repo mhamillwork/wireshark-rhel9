@@ -22,8 +22,11 @@
 # /etc/docker/tls, dockerd also uses --tlsverify so a plaintext TCP bind is
 # not a future startup failure. The volume has to be a block filesystem such
 # as ext4 or xfs.
-# NFS cannot host overlay2. IPv6 iptables stay off. /lib/modules comes from
-# the node so modprobe can load iptable_nat.
+# NFS cannot host overlay2. IPv6 iptables stay off. The node must already
+# have overlay, br_netfilter, and iptable_nat loaded. The pod mounts
+# /lib/modules, but a module that is not loaded on the node still leaves
+# dockerd unable to start. Persist them in /etc/modules-load.d so a reboot
+# loads them before the pod starts.
 # The Service is ClusterIP. Leave it inside the cluster. Job pods in gitlab
 # use DOCKER_HOST=tcp://wireshark-docker:2375. After the job image contains
 # /etc/docker/tls, dockerd requires a client certificate.
