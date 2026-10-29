@@ -5,8 +5,9 @@
 # src/scripts/run-compile-image.sh. Validate checks this checkout in the job
 # container: the compile image does not contain dockerfile/ or tests/.
 # GitLab does not pull wireshark-ubi9:dev. The job image is
-# ubi9-tahaa-bootstrap-docker.
-# That image has the Docker client and dockerd. The compile and runtime
+# ubi9-tahaa-bootstrap-docker. That tag is ubi9-tahaa-bootstrap plus the
+# Artifactory yum repo for the Docker RPMs. Its Dockerfile starts FROM that
+# tag and installs the Docker client and dockerd. The compile and runtime
 # Dockerfiles still FROM ubi9-tahaa-bootstrap.
 #
 # Kubernetes nodes do not provide a Docker socket. Apply

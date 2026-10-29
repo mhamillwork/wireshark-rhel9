@@ -5,23 +5,26 @@
 #     -f dockerfile/Dockerfile.ubi9-tahaa-bootstrap-docker \
 #     -t artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap-docker:9.8 .
 #
-# The base is ubi9-tahaa-bootstrap. This image adds the Docker client,
-# dockerd, and the packages a GitLab job needs to check out the repository.
-# Job containers use the client. A privileged Deployment runs dockerd from
-# this same image; see k8s/wireshark-docker.yaml. The image holds the TLS
+# The base is that same tag. It is ubi9-tahaa-bootstrap:9.8 plus the yum repo
+# file that installs Docker RPMs from Artifactory. Satellite does not publish
+# those packages yet. This Dockerfile installs the Docker client, dockerd,
+# and the packages a GitLab job needs to check out the repository. Job
+# containers use the client. A privileged Deployment runs dockerd from this
+# same image; see k8s/wireshark-docker.yaml. The image holds the TLS
 # certificates for that engine under /etc/docker/tls. The image command stays
 # bash, so a job does not start the engine. The compile and runtime images
-# do not use this image as their base.
+# stay on ubi9-tahaa-bootstrap:9.8. They do not install Docker RPMs.
 #
 # The distro package named docker stores images under /var/lib/containers
 # and mounts them with fuse-overlayfs. This image does not install that
-# package. Satellite has to provide docker-ce, docker-ce-cli, and containerd.io.
-# The install script enables CodeReady Builder and any repo id containing
-# docker. An existing /usr/bin/docker from another package is removed first
-# so it cannot block docker-ce-cli. A build log that quotes the old
-# dnf.conf edit is from the previous Dockerfile.
+# package. The base image's yum.repos.d file points at Artifactory for
+# docker-ce, docker-ce-cli, and containerd.io. The install script enables
+# CodeReady Builder and any repo id containing docker. An existing
+# /usr/bin/docker from another package is removed first so it cannot block
+# docker-ce-cli. A build log that quotes the old dnf.conf edit is from the
+# previous Dockerfile.
 
-ARG BOOTSTRAP_IMAGE=artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap:9.8
+ARG BOOTSTRAP_IMAGE=artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap-docker:9.8
 
 FROM ${BOOTSTRAP_IMAGE}
 
