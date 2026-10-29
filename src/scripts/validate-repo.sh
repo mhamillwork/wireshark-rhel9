@@ -60,17 +60,18 @@ grep -q 'artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap:9.8
 grep -q 'artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap-docker:9.8' .gitlab-ci.yml || build_fail "GitLab job image is not the bootstrap image with the docker client"
 job_df="dockerfile/Dockerfile.ubi9-tahaa-bootstrap-docker"
 [ -f "$job_df" ] || build_fail "job image Dockerfile is missing"
-# The pod and the GitLab job run ubi9-tahaa-bootstrap-docker:9.8. This file
-# builds that tag. Its FROM line stays ubi9-tahaa-bootstrap:9.8, same as the
-# compile and runtime Dockerfiles. GitLab sets BOOTSTRAP_IMAGE to the docker
-# tag, so this pattern stays single-quoted and is not expanded.
-job_base='artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap:9.8'
+# ubi9-tahaa-bootstrap-docker:9.8 is ubi9-tahaa-bootstrap:9.8 plus the
+# Artifactory yum repo for Docker RPMs. This Dockerfile starts from that
+# image and installs docker-ce. Compile and runtime images stay on the
+# plain bootstrap. Keep this pattern single-quoted: GitLab sets
+# BOOTSTRAP_IMAGE to the docker tag for the job container.
+job_base='artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap-docker:9.8'
 # shellcheck disable=SC2016
 job_from='FROM ${BOOTSTRAP_IMAGE}'
-if ! grep -q "$job_base" "$job_df" || ! grep -qF "$job_from" "$job_df"; then
+if ! grep -qF "ARG BOOTSTRAP_IMAGE=${job_base}" "$job_df" || ! grep -qF "$job_from" "$job_df"; then
   echo "ARG and FROM lines in ${job_df}:" >&2
   grep -nE '^(ARG|FROM)[[:space:]]' "$job_df" >&2 || true
-  build_fail "job image Dockerfile does not start from ${job_base}. The wireshark-docker tag ubi9-tahaa-bootstrap-docker:9.8 is the image this file builds"
+  build_fail "job image Dockerfile does not start from ${job_base}. That image carries the Artifactory yum repo for the Docker RPMs. Compile and runtime images stay on ubi9-tahaa-bootstrap:9.8"
 fi
 grep -q 'install-job-image-packages.sh' dockerfile/Dockerfile.ubi9-tahaa-bootstrap-docker || build_fail "job image Dockerfile does not run the package install script"
 grep -q 'docker-ce-cli' src/scripts/install-job-image-packages.sh || build_fail "job image install script does not install the Docker client"
