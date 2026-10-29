@@ -2,9 +2,9 @@
 # Run a command in the compile image.
 # A local daemon bind-mounts the checkout. A remote daemon (DOCKER_HOST=tcp://...)
 # cannot see that path, so the checkout is copied to /workspace on a volume
-# named for this pipeline. The Wireshark build stays there for the next job.
-# GitLab only receives src/artifacts and the logs. The run/ tree is larger
-# than the coordinator's artifact limit.
+# named for this pipeline. The Wireshark build and the RPM stay there.
+# Jobs do not upload GitLab artifacts: this runner posts those to the
+# webservice, and that service returns 400 for every archive.
 set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"

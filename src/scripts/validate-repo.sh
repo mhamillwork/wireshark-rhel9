@@ -129,6 +129,9 @@ fi
 if grep -q 'wireshark-image.tar' .gitlab-ci.yml; then
   build_fail "GitLab artifacts include the runtime image archive"
 fi
+if grep -q '^  artifacts:' .gitlab-ci.yml; then
+  build_fail "GitLab jobs upload artifacts. This runner posts them to the webservice, which returns 400"
+fi
 grep -q 'docker volume rm' .gitlab-ci.yml || build_fail "GitLab does not remove the pipeline workspace volume"
 grep -q 'Dockerfile.wireshark-ubi9-runtime' .gitlab-ci.yml || build_fail "GitLab docker job does not build the runtime Dockerfile"
 grep -q -- '--add-host satellite9b.hsv.local:10.10.106.59' README.md || build_fail "README compile build is missing the Satellite host"
