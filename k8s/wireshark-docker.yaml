@@ -14,10 +14,13 @@
 # and its command is dockerd. The pipeline does not build that image and
 # does not apply this file.
 #
-# The pod is privileged so dockerd can mount overlay2. Before dockerd starts,
-# the command enables cgroup v2 controllers and tries an overlay mount on the
-# volume. The volume has to be a block filesystem such as ext4 or xfs. NFS
-# cannot host overlay2. Its iptables rules stay in the pod network namespace.
+# The pod is privileged so dockerd can mount overlay2 and load the netfilter
+# modules. Before dockerd starts, the command enables cgroup v2 controllers,
+# tries an overlay mount on the volume, and picks an iptables command that
+# can open the nat table. The volume has to be a block filesystem such as
+# ext4 or xfs. NFS cannot host overlay2. IPv6 iptables stay off. The IPv4
+# rules stay in the pod network namespace. /lib/modules comes from the node
+# so modprobe can load iptable_nat.
 # The Service is ClusterIP with no TLS. Leave it inside the cluster. Job pods
 # in gitlab use DOCKER_HOST=tcp://wireshark-docker:2375.
 #
@@ -91,7 +94,40 @@ spec:
               fi
               umount /var/lib/docker/ovl-probe/m
               rm -rf /var/lib/docker/ovl-probe
-              exec dockerd --host=tcp://0.0.0.0:2375 --iptables=true --storage-driver=overlay2 --data-root=/var/lib/docker --exec-opt native.cgroupdriver=cgroupfs
+              echo 1 >/proc/sys/net/ipv4/ip_forward 2>/dev/null || echo "could not enable ip_forward" >&2
+              if command -v modprobe >/dev/null 2>&1; then
+                for module in ip_tables iptable_filter iptable_nat nf_tables nf_nat br_netfilter overlay; do
+                  modprobe "$module" 2>/dev/null || echo "kernel module ${module} was not loaded" >&2
+                done
+              fi
+              nat_table_opens() { "$1" -t nat -L -n >/dev/null 2>&1; }
+              chosen=""
+              for candidate in iptables-nft iptables-legacy iptables; do
+                if command -v "$candidate" >/dev/null 2>&1 && nat_table_opens "$candidate"; then
+                  chosen="$candidate"
+                  break
+                fi
+              done
+              if [ -z "$chosen" ]; then
+                echo "iptables cannot open the nat table, so dockerd cannot create the DOCKER chain. The node needs the iptable_nat or nf_tables module." >&2
+                iptables -t nat -L -n >&2 || true
+                iptables-nft -t nat -L -n >&2 || true
+                iptables-legacy -t nat -L -n >&2 || true
+                exit 1
+              fi
+              mkdir -p /usr/local/sbin
+              target="$(command -v "$chosen")"
+              ln -sfn "$target" /usr/local/sbin/iptables
+              if [ "$target" != /usr/sbin/iptables ]; then
+                ln -sfn "$target" /usr/sbin/iptables
+              fi
+              case "$chosen" in
+                iptables-nft) ln -sfn "$(command -v ip6tables-nft)" /usr/local/sbin/ip6tables 2>/dev/null || true ;;
+                iptables-legacy) ln -sfn "$(command -v ip6tables-legacy)" /usr/local/sbin/ip6tables 2>/dev/null || true ;;
+              esac
+              echo "using ${chosen} for the DOCKER nat chain"
+              export PATH="/usr/local/sbin:${PATH}"
+              exec dockerd --host=tcp://0.0.0.0:2375 --iptables=true --ip6tables=false --storage-driver=overlay2 --data-root=/var/lib/docker --exec-opt native.cgroupdriver=cgroupfs
           securityContext:
             privileged: true
           ports:
@@ -106,10 +142,17 @@ spec:
           volumeMounts:
             - name: docker-data
               mountPath: /var/lib/docker
+            - name: kernel-modules
+              mountPath: /lib/modules
+              readOnly: true
       volumes:
         - name: docker-data
           persistentVolumeClaim:
             claimName: wireshark-docker
+        - name: kernel-modules
+          hostPath:
+            path: /lib/modules
+            type: Directory
 ---
 apiVersion: v1
 kind: Service

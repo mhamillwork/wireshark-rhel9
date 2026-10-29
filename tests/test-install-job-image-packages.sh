@@ -96,6 +96,7 @@ grep -F -- '--enablerepo=ubi-9-codeready-builder-rpms' "$log" >/dev/null || fail
 grep -F -- '--enablerepo=docker-ce-stable' "$log" >/dev/null || fail "docker repo was not enabled: $(cat "$log")"
 grep -F 'docker-ce' "$log" >/dev/null || fail "docker-ce was not requested: $(cat "$log")"
 grep -F 'containerd.io' "$log" >/dev/null || fail "containerd.io was not requested: $(cat "$log")"
+grep -F 'iptables' "$log" >/dev/null || fail "iptables was not requested: $(cat "$log")"
 [ ! -e "$image_root/etc/rhsm-host" ] || fail "rhsm-host file was left in place"
 grep -q '^priority=1$' "$image_root/etc/yum.repos.d/ubi.repo" || fail "ubi.repo did not gain priority"
 [ -L "$image_root/etc/rhsm-host" ] || fail "rhsm-host symlink was not restored"
