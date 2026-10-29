@@ -30,8 +30,17 @@ case "$cmd" in
     exit 0
     ;;
   exec)
+    if [ "${1:-}" = "-e" ]; then
+      shift 2
+    fi
     if [ "${1:-}" = "-w" ]; then
       exit "${DOCKER_STUB_EXEC_STATUS:-0}"
+    fi
+    if [ "${2:-}" = "test" ] && [ "${3:-}" = "-d" ]; then
+      case "${4:-}" in
+        /workspace|/workspace/src/build) exit 0 ;;
+        *) exit 1 ;;
+      esac
     fi
     exit 0
     ;;
@@ -87,7 +96,12 @@ tcp_log="$tmp/tcp.log"
 run_case "$tcp_log" \
   env DOCKER_HOST=tcp://wireshark-docker:2375 \
   "$root/src/scripts/run-compile-image.sh" ./src/scripts/validate-repo.sh --rhel 9
-grep -q 'exec -w /workspace' "$tcp_log" || fail "tcp path did not exec in /workspace: $(cat "$tcp_log")"
+grep -q -- '-w /workspace' "$tcp_log" || fail "tcp path did not exec in /workspace: $(cat "$tcp_log")"
+grep -q 'CHECKOUT_ROOT=/workspace' "$tcp_log" || fail "tcp path did not pin the checkout: $(cat "$tcp_log")"
+grep -F 'test -d /workspace/src/artifacts' "$tcp_log" >/dev/null || fail "tcp path did not check for src/artifacts: $(cat "$tcp_log")"
+if grep -F ':/workspace/src/artifacts' "$tcp_log"; then
+  fail "tcp path copied missing src/artifacts: $(cat "$tcp_log")"
+fi
 grep -F "cp ${repo}/." "$tcp_log" | grep -F ':/workspace/' >/dev/null || fail "tcp path did not copy the checkout: $(cat "$tcp_log")"
 grep -F 'sleep\ infinity' "$tcp_log" >/dev/null || fail "tcp path did not keep a workspace container: $(cat "$tcp_log")"
 if grep -q ' -v ' "$tcp_log"; then

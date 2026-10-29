@@ -1,8 +1,11 @@
 # RHEL 9 build. The compile-image job builds
 # dockerfile/Dockerfile.wireshark-ubi9-build and tags it wireshark-ubi9:dev.
-# That build reaches Satellite with --add-host. Later jobs run commands in
-# that local tag through src/scripts/run-compile-image.sh. GitLab does not
-# pull wireshark-ubi9:dev. The job image is ubi9-tahaa-bootstrap-docker.
+# That build reaches Satellite with --add-host. Compile, test, rpm, and
+# package-test then run commands in that local tag through
+# src/scripts/run-compile-image.sh. Validate checks this checkout in the job
+# container: the compile image does not contain dockerfile/ or tests/.
+# GitLab does not pull wireshark-ubi9:dev. The job image is
+# ubi9-tahaa-bootstrap-docker.
 # That image has the Docker client and dockerd. The compile and runtime
 # Dockerfiles still FROM ubi9-tahaa-bootstrap.
 #
@@ -82,7 +85,7 @@ validate:
   stage: validate
   needs: ["compile-image"]
   script:
-    - ./src/scripts/run-compile-image.sh ./src/scripts/validate-repo.sh
+    - ./src/scripts/validate-repo.sh
     - test "$BUILD_TYPE" = dev -o "$BUILD_TYPE" = release
 
 compile:
