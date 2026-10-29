@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # Run a command in the compile image.
 # A local daemon bind-mounts the checkout. A remote daemon (DOCKER_HOST=tcp://...)
-# cannot see that path, so the checkout is copied to /workspace and
-# src/build plus src/artifacts are copied back when the command created them.
+# cannot see that path, so the checkout is copied to /workspace on a volume
+# named for this pipeline. The Wireshark build stays there for the next job.
+# GitLab only receives src/artifacts and the logs. The run/ tree is larger
+# than the coordinator's artifact limit.
 set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -65,18 +67,37 @@ own_remote_outputs() {
     bash "$(id -u)" "$(id -g)"
 }
 
+workspace_volume() {
+  printf 'wireshark-%s' "${CI_PIPELINE_ID:-local}"
+}
+
+prepare_workspace_volume() {
+  local current old
+  current="$(workspace_volume)"
+  docker volume create --label wireshark-pipeline=1 "$current" >/dev/null
+  # A failed pipeline leaves its build on the engine disk. Remove volumes
+  # from other pipelines. The one mounted by a running job is left in place.
+  while IFS= read -r old; do
+    [ -n "$old" ] || continue
+    [ "$old" = "$current" ] && continue
+    docker volume rm "$old" >/dev/null 2>&1 || true
+  done < <(docker volume ls -q --filter label=wireshark-pipeline=1 || true)
+}
+
 copy_back() {
-  local name="$1" rel stage
+  local name="$1" rel stage parent
   # docker cp of a missing path prints "Could not find the file" and is
-  # not a failed command. Validate does not create either directory.
-  for rel in src/build src/artifacts; do
+  # not a failed command. The build tree stays on the volume. The runner
+  # only needs the RPM and the logs.
+  for rel in src/artifacts src/build/rhel9/logs; do
     if ! docker exec "$name" test -d "/workspace/${rel}"; then
       continue
     fi
     stage="$(mktemp -d)"
     if docker cp "${name}:/workspace/${rel}" "${stage}/tree"; then
+      parent="$(dirname "$rel")"
       rm -rf "${root:?}/${rel}"
-      mkdir -p "${root}/src"
+      mkdir -p "${root}/${parent}"
       mv "${stage}/tree" "${root}/${rel}"
     fi
     rm -rf "$stage"
@@ -84,12 +105,14 @@ copy_back() {
 }
 
 run_remote() {
-  local name status=0
+  local name status=0 volume
   name="wireshark-${CI_JOB_ID:-$$}"
+  volume="$(workspace_volume)"
   # shellcheck disable=SC2064
   trap "docker rm -f '$name' >/dev/null 2>&1 || true" RETURN
   docker rm -f "$name" >/dev/null 2>&1 || true
-  docker create --name "$name" --network=host --entrypoint bash "$image" \
+  prepare_workspace_volume
+  docker create --name "$name" --network=host -v "${volume}:/workspace" --entrypoint bash "$image" \
     -c 'mkdir -p /workspace && exec sleep infinity' >/dev/null
   docker start "$name" >/dev/null
   wait_for_workspace "$name"

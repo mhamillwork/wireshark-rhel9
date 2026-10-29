@@ -121,7 +121,15 @@ grep -q 'Dockerfile.wireshark-ubi9-build' .gitlab-ci.yml || build_fail "GitLab d
 grep -q 'run-compile-image.sh' .gitlab-ci.yml || build_fail "GitLab compile jobs do not run inside the compile image"
 grep -q '    - ./src/scripts/validate-repo.sh' .gitlab-ci.yml || build_fail "GitLab validate job does not check the checkout directly"
 grep -q 'test -d "/workspace/' src/scripts/run-compile-image.sh || build_fail "remote copy back does not skip a missing build directory"
+grep -q 'wireshark-pipeline=1' src/scripts/run-compile-image.sh || build_fail "remote compile does not keep the build on a pipeline volume"
 grep -q 'CHECKOUT_ROOT=/workspace' src/scripts/run-compile-image.sh || build_fail "remote compile container does not pin the checkout at /workspace"
+if grep -q 'wireshark/run/' .gitlab-ci.yml; then
+  build_fail "GitLab artifacts include the Wireshark run directory"
+fi
+if grep -q 'wireshark-image.tar' .gitlab-ci.yml; then
+  build_fail "GitLab artifacts include the runtime image archive"
+fi
+grep -q 'docker volume rm' .gitlab-ci.yml || build_fail "GitLab does not remove the pipeline workspace volume"
 grep -q 'Dockerfile.wireshark-ubi9-runtime' .gitlab-ci.yml || build_fail "GitLab docker job does not build the runtime Dockerfile"
 grep -q -- '--add-host satellite9b.hsv.local:10.10.106.59' README.md || build_fail "README compile build is missing the Satellite host"
 grep -q 'Dockerfile.wireshark-ubi9-runtime' README.md || build_fail "README is missing the runtime image build"

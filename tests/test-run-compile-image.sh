@@ -26,7 +26,7 @@ log="${DOCKER_STUB_LOG:?}"
 cmd="$1"
 shift
 case "$cmd" in
-  image|rm|create|start)
+  image|rm|create|start|volume)
     exit 0
     ;;
   exec)
@@ -38,7 +38,7 @@ case "$cmd" in
     fi
     if [ "${2:-}" = "test" ] && [ "${3:-}" = "-d" ]; then
       case "${4:-}" in
-        /workspace|/workspace/src/build) exit 0 ;;
+        /workspace|/workspace/src/build/rhel9/logs) exit 0 ;;
         *) exit 1 ;;
       esac
     fi
@@ -48,7 +48,7 @@ case "$cmd" in
     src="$1"
     dest="$2"
     case "$src" in
-      *:/workspace/src/build)
+      *:/workspace/src/build/rhel9/logs)
         mkdir -p "$dest"
         echo built > "$dest/marker"
         exit 0
@@ -86,7 +86,7 @@ run_case() {
     export DOCKER_STUB_LOG="$log"
     export CI_PROJECT_DIR="$repo"
     export WIRESHARK_IMAGE="wireshark-ubi9:dev"
-    unset DOCKER_STUB_EXEC_STATUS
+    unset DOCKER_STUB_EXEC_STATUS CI_PIPELINE_ID
     cd "$repo"
     "$@"
   )
@@ -104,11 +104,15 @@ if grep -F ':/workspace/src/artifacts' "$tcp_log"; then
 fi
 grep -F "cp ${repo}/." "$tcp_log" | grep -F ':/workspace/' >/dev/null || fail "tcp path did not copy the checkout: $(cat "$tcp_log")"
 grep -F 'sleep\ infinity' "$tcp_log" >/dev/null || fail "tcp path did not keep a workspace container: $(cat "$tcp_log")"
-if grep -q ' -v ' "$tcp_log"; then
+grep -F -- '-v wireshark-local:/workspace' "$tcp_log" >/dev/null || fail "tcp path did not mount the pipeline volume: $(cat "$tcp_log")"
+if grep -F -- "-v ${repo}:${repo}" "$tcp_log"; then
   fail "tcp path bind-mounted the checkout: $(cat "$tcp_log")"
 fi
-[ -f "$repo/src/build/marker" ] || fail "tcp path did not copy src/build back"
-grep -qx built "$repo/src/build/marker" || fail "copied build marker was $(cat "$repo/src/build/marker")"
+if grep -E ':/workspace/src/build([^/]|$)' "$tcp_log"; then
+  fail "tcp path copied the whole build tree: $(cat "$tcp_log")"
+fi
+[ -f "$repo/src/build/rhel9/logs/marker" ] || fail "tcp path did not copy logs back"
+grep -qx built "$repo/src/build/rhel9/logs/marker" || fail "copied log marker was $(cat "$repo/src/build/rhel9/logs/marker")"
 [ ! -e "$repo/src/artifacts" ] || fail "missing src/artifacts was created"
 
 rm -rf "$repo/src/build"
@@ -136,12 +140,13 @@ set +e
   export DOCKER_STUB_EXEC_STATUS=9
   export CI_PROJECT_DIR="$repo"
   export DOCKER_HOST=tcp://wireshark-docker:2375
+  unset CI_PIPELINE_ID
   cd "$repo"
   "$root/src/scripts/run-compile-image.sh" ./src/scripts/validate-repo.sh
 )
 status=$?
 set -e
 [ "$status" -eq 9 ] || fail "remote command status was $status"
-[ -f "$repo/src/build/marker" ] || fail "failed remote command did not copy src/build back"
+[ -f "$repo/src/build/rhel9/logs/marker" ] || fail "failed remote command did not copy logs back"
 
 echo "run-compile-image remote and local paths passed"
