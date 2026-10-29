@@ -71,12 +71,10 @@ if grep -q "printf 'assumeyes=1" dockerfile/Dockerfile.ubi9-tahaa-bootstrap-dock
   build_fail "job image Dockerfile still edits dnf.conf in the build step that failed"
 fi
 grep -q 'DOCKER_HOST: tcp://wireshark-docker:2375' .gitlab-ci.yml || build_fail "GitLab DOCKER_HOST is not the in-cluster engine"
-grep -q 'DOCKER_TLS_VERIFY: "1"' .gitlab-ci.yml || build_fail "GitLab client does not verify the engine TLS certificate"
-grep -q 'DOCKER_CERT_PATH: /etc/docker/tls' .gitlab-ci.yml || build_fail "GitLab client certificate path is not /etc/docker/tls"
-if grep -q 'DOCKER_TLS_CERTDIR' .gitlab-ci.yml; then
-  build_fail "GitLab still disables engine TLS with DOCKER_TLS_CERTDIR"
+if grep -E 'DOCKER_TLS_VERIFY[:=]|DOCKER_CERT_PATH[:=]|DOCKER_BUILDKIT[:=]' .gitlab-ci.yml; then
+  build_fail "GitLab client uses HTTPS or disables BuildKit"
 fi
-grep -q 'DOCKER_BUILDKIT: "0"' .gitlab-ci.yml || build_fail "GitLab does not pin the engine's built-in builder"
+grep -q 'unset DOCKER_TLS_VERIFY DOCKER_CERT_PATH DOCKER_BUILDKIT' .gitlab-ci.yml || build_fail "GitLab docker commands can inherit a TLS client setting"
 [ -f k8s/wireshark-docker.yaml ] || build_fail "k8s/wireshark-docker.yaml is missing"
 grep -q 'artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap-docker:9.8' k8s/wireshark-docker.yaml || build_fail "engine manifest image is not the job image"
 grep -q 'privileged: true' k8s/wireshark-docker.yaml || build_fail "engine manifest is not privileged"
