@@ -60,8 +60,18 @@ grep -q 'artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap:9.8
 grep -q 'artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap-docker:9.8' .gitlab-ci.yml || build_fail "GitLab job image is not the bootstrap image with the docker client"
 job_df="dockerfile/Dockerfile.ubi9-tahaa-bootstrap-docker"
 [ -f "$job_df" ] || build_fail "job image Dockerfile is missing"
-grep -qF 'ARG BOOTSTRAP_IMAGE=artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap:9.8' "$job_df" || build_fail "job image Dockerfile does not start from the bootstrap image"
-grep -qF "FROM \${BOOTSTRAP_IMAGE}" "$job_df" || build_fail "job image Dockerfile does not start from the bootstrap image"
+# The pod and the GitLab job run ubi9-tahaa-bootstrap-docker:9.8. This file
+# builds that tag. Its FROM line stays ubi9-tahaa-bootstrap:9.8, same as the
+# compile and runtime Dockerfiles. GitLab sets BOOTSTRAP_IMAGE to the docker
+# tag, so this pattern stays single-quoted and is not expanded.
+job_base='artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap:9.8'
+# shellcheck disable=SC2016
+job_from='FROM ${BOOTSTRAP_IMAGE}'
+if ! grep -q "$job_base" "$job_df" || ! grep -qF "$job_from" "$job_df"; then
+  echo "ARG and FROM lines in ${job_df}:" >&2
+  grep -nE '^(ARG|FROM)[[:space:]]' "$job_df" >&2 || true
+  build_fail "job image Dockerfile does not start from ${job_base}. The wireshark-docker tag ubi9-tahaa-bootstrap-docker:9.8 is the image this file builds"
+fi
 grep -q 'install-job-image-packages.sh' dockerfile/Dockerfile.ubi9-tahaa-bootstrap-docker || build_fail "job image Dockerfile does not run the package install script"
 grep -q 'docker-ce-cli' src/scripts/install-job-image-packages.sh || build_fail "job image install script does not install the Docker client"
 grep -qE '^[[:space:]]+docker-ce[[:space:]]*\\$' src/scripts/install-job-image-packages.sh || build_fail "job image install script does not install docker-ce"
@@ -130,6 +140,7 @@ fi
 "$root/tests/test-intree-plugins.sh"
 "$root/tests/test-run-compile-image.sh"
 "$root/tests/test-install-job-image-packages.sh"
+"$root/tests/test-job-image-dockerfile.sh"
 "$root/tests/test-write-docker-tls.sh"
 if command -v rpmbuild >/dev/null 2>&1; then
   "$root/tests/test-rpm-metadata.sh"
