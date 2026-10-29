@@ -97,6 +97,7 @@ grep -F -- '--enablerepo=docker-ce-stable' "$log" >/dev/null || fail "docker rep
 grep -F 'docker-ce' "$log" >/dev/null || fail "docker-ce was not requested: $(cat "$log")"
 grep -F 'containerd.io' "$log" >/dev/null || fail "containerd.io was not requested: $(cat "$log")"
 grep -F 'iptables' "$log" >/dev/null || fail "iptables was not requested: $(cat "$log")"
+grep -F 'openssl' "$log" >/dev/null || fail "openssl was not requested: $(cat "$log")"
 [ ! -e "$image_root/etc/rhsm-host" ] || fail "rhsm-host file was left in place"
 grep -q '^priority=1$' "$image_root/etc/yum.repos.d/ubi.repo" || fail "ubi.repo did not gain priority"
 [ -L "$image_root/etc/rhsm-host" ] || fail "rhsm-host symlink was not restored"

@@ -8,7 +8,8 @@
 # The base is ubi9-tahaa-bootstrap. This image adds the Docker client,
 # dockerd, and the packages a GitLab job needs to check out the repository.
 # Job containers use the client. A privileged Deployment runs dockerd from
-# this same image; see k8s/wireshark-docker.yaml. The image command stays
+# this same image; see k8s/wireshark-docker.yaml. The image holds the TLS
+# certificates for that engine under /etc/docker/tls. The image command stays
 # bash, so a job does not start the engine. The compile and runtime images
 # do not use this image as their base.
 #
@@ -25,8 +26,10 @@ ARG BOOTSTRAP_IMAGE=artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bo
 FROM ${BOOTSTRAP_IMAGE}
 
 COPY src/scripts/install-job-image-packages.sh /tmp/install-job-image-packages.sh
+COPY src/scripts/write-docker-tls.sh /tmp/write-docker-tls.sh
 
 RUN bash /tmp/install-job-image-packages.sh \
-    && rm -f /tmp/install-job-image-packages.sh
+    && bash /tmp/write-docker-tls.sh \
+    && rm -f /tmp/install-job-image-packages.sh /tmp/write-docker-tls.sh
 
 CMD ["bash"]

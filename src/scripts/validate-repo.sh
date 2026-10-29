@@ -71,7 +71,11 @@ if grep -q "printf 'assumeyes=1" dockerfile/Dockerfile.ubi9-tahaa-bootstrap-dock
   build_fail "job image Dockerfile still edits dnf.conf in the build step that failed"
 fi
 grep -q 'DOCKER_HOST: tcp://wireshark-docker:2375' .gitlab-ci.yml || build_fail "GitLab DOCKER_HOST is not the in-cluster engine"
-grep -q 'DOCKER_TLS_CERTDIR: ""' .gitlab-ci.yml || build_fail "GitLab DOCKER_TLS_CERTDIR is not empty"
+grep -q 'DOCKER_TLS_VERIFY: "1"' .gitlab-ci.yml || build_fail "GitLab client does not verify the engine TLS certificate"
+grep -q 'DOCKER_CERT_PATH: /etc/docker/tls' .gitlab-ci.yml || build_fail "GitLab client certificate path is not /etc/docker/tls"
+if grep -q 'DOCKER_TLS_CERTDIR' .gitlab-ci.yml; then
+  build_fail "GitLab still disables engine TLS with DOCKER_TLS_CERTDIR"
+fi
 grep -q 'DOCKER_BUILDKIT: "0"' .gitlab-ci.yml || build_fail "GitLab does not pin the engine's built-in builder"
 [ -f k8s/wireshark-docker.yaml ] || build_fail "k8s/wireshark-docker.yaml is missing"
 grep -q 'artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap-docker:9.8' k8s/wireshark-docker.yaml || build_fail "engine manifest image is not the job image"
@@ -82,8 +86,12 @@ grep -q 'native.cgroupdriver=cgroupfs' k8s/wireshark-docker.yaml || build_fail "
 grep -q 'cgroup.subtree_control' k8s/wireshark-docker.yaml || build_fail "engine manifest does not enable cgroup v2 controllers"
 grep -q 'cannot mount overlay' k8s/wireshark-docker.yaml || build_fail "engine manifest does not report an overlay volume failure"
 grep -q 'iptable_nat' k8s/wireshark-docker.yaml || build_fail "engine manifest does not load the nat module"
-grep -q -- '--ip6tables=false' k8s/wireshark-docker.yaml || build_fail "engine manifest still starts IPv6 iptables"
-grep -q -- '--iptables=false' k8s/wireshark-docker.yaml || build_fail "engine manifest does not start when the DOCKER nat chain cannot be created"
+grep -q -- '--iptables=false' k8s/wireshark-docker.yaml || build_fail "engine manifest does not disable iptables"
+if grep -q -- '--iptables=true' k8s/wireshark-docker.yaml; then
+  build_fail "engine manifest can still enable iptables"
+fi
+grep -q -- '--tlsverify' k8s/wireshark-docker.yaml || build_fail "engine manifest does not verify TLS"
+grep -q -- '-n gitlab' k8s/wireshark-docker.yaml || build_fail "engine manifest does not document applying into the gitlab namespace"
 grep -q -- '--network=host' .gitlab-ci.yml || build_fail "GitLab image builds do not use the engine pod network"
 grep -q -- '--network=host' src/scripts/run-compile-image.sh || build_fail "remote compile container does not use the engine pod network"
 grep -q '/lib/modules' k8s/wireshark-docker.yaml || build_fail "engine manifest does not mount the node kernel modules"
@@ -118,6 +126,7 @@ fi
 "$root/tests/test-intree-plugins.sh"
 "$root/tests/test-run-compile-image.sh"
 "$root/tests/test-install-job-image-packages.sh"
+"$root/tests/test-write-docker-tls.sh"
 if command -v rpmbuild >/dev/null 2>&1; then
   "$root/tests/test-rpm-metadata.sh"
 else

@@ -1,13 +1,13 @@
 # Docker engine for the GitLab Kubernetes runner.
 #
 # The runner and its job pods are in the gitlab namespace. The claim, the
-# Deployment, and the Service each set that namespace. Apply with no -n flag.
-# kubectl apply -n default overrides the namespace in this file and creates
-# the objects in default. Delete those before applying again. A volume in
-# default does not move to gitlab.
+# Deployment, and the Service each set that namespace. Apply with -n gitlab.
+# The kube context here is default, and applying without -n gitlab has been
+# creating the pod in default. Delete the default objects first. A volume
+# in default does not move to gitlab.
 #
 #   kubectl -n default delete deployment,service,pvc wireshark-docker --ignore-not-found
-#   kubectl apply -f k8s/wireshark-docker.yaml
+#   kubectl apply -f k8s/wireshark-docker.yaml -n gitlab
 #
 # Rebuild and push the job image first. The pod pulls
 # artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap-docker:9.8
@@ -16,14 +16,17 @@
 #
 # The pod is privileged so dockerd can mount overlay2 and load the netfilter
 # modules. Before dockerd starts, the command enables cgroup v2 controllers,
-# tries an overlay mount on the volume, and tries to create the DOCKER nat
-# chain. When that chain cannot be created, dockerd starts with iptables
-# disabled so the bridge driver still registers. Image builds then use the
-# pod network. The volume has to be a block filesystem such as ext4 or xfs.
+# tries an overlay mount on the volume, then starts dockerd with iptables
+# disabled. This kernel crashes dockerd when the bridge driver creates the
+# DOCKER nat chain, so iptables stays off. Image builds use the pod network. When the image contains
+# /etc/docker/tls, dockerd also uses --tlsverify so a plaintext TCP bind is
+# not a future startup failure. The volume has to be a block filesystem such
+# as ext4 or xfs.
 # NFS cannot host overlay2. IPv6 iptables stay off. /lib/modules comes from
 # the node so modprobe can load iptable_nat.
-# The Service is ClusterIP with no TLS. Leave it inside the cluster. Job pods
-# in gitlab use DOCKER_HOST=tcp://wireshark-docker:2375.
+# The Service is ClusterIP. Leave it inside the cluster. Job pods in gitlab
+# use DOCKER_HOST=tcp://wireshark-docker:2375. After the job image contains
+# /etc/docker/tls, dockerd requires a client certificate.
 #
 # One volume holds /var/lib/docker, so wireshark-ubi9:dev survives a restart.
 # The claim is ReadWriteOnce, so the Deployment uses Recreate.
@@ -101,48 +104,14 @@ spec:
                   modprobe "$module" 2>/dev/null || echo "kernel module ${module} was not loaded" >&2
                 done
               fi
-              nat_chain_creates() {
-                local err
-                err="$(mktemp)"
-                if "$1" -t nat -N DOCKER >"$err" 2>&1; then
-                  rm -f "$err"
-                  return 0
-                fi
-                if grep -q 'already exists' "$err"; then
-                  rm -f "$err"
-                  return 0
-                fi
-                echo "iptables candidate $1 could not create the DOCKER nat chain:" >&2
-                cat "$err" >&2
-                rm -f "$err"
-                return 1
-              }
-              chosen=""
-              for candidate in iptables-nft iptables-legacy iptables; do
-                if command -v "$candidate" >/dev/null 2>&1 && nat_chain_creates "$candidate"; then
-                  chosen="$candidate"
-                  break
-                fi
-              done
-              iptables_arg="--iptables=false"
-              if [ -n "$chosen" ]; then
-                mkdir -p /usr/local/sbin
-                target="$(command -v "$chosen")"
-                ln -sfn "$target" /usr/local/sbin/iptables
-                if [ "$target" != /usr/sbin/iptables ]; then
-                  ln -sfn "$target" /usr/sbin/iptables
-                fi
-                case "$chosen" in
-                  iptables-nft) ln -sfn "$(command -v ip6tables-nft)" /usr/local/sbin/ip6tables 2>/dev/null || true ;;
-                  iptables-legacy) ln -sfn "$(command -v ip6tables-legacy)" /usr/local/sbin/ip6tables 2>/dev/null || true ;;
-                esac
-                export PATH="/usr/local/sbin:${PATH}"
-                iptables_arg="--iptables=true"
-                echo "using ${chosen} for the DOCKER nat chain"
+              tls_args=()
+              if [ -f /etc/docker/tls/ca.pem ] && [ -f /etc/docker/tls/server-cert.pem ] && [ -f /etc/docker/tls/server-key.pem ]; then
+                tls_args=(--tlsverify --tlscacert=/etc/docker/tls/ca.pem --tlscert=/etc/docker/tls/server-cert.pem --tlskey=/etc/docker/tls/server-key.pem)
+                echo "Starting dockerd with --iptables=false and --tlsverify."
               else
-                echo "Starting dockerd with --iptables=false. The DOCKER nat chain cannot be created in this pod. Image builds use the pod network." >&2
+                echo "Starting dockerd with --iptables=false. This image has no TLS certificates, so the plaintext TCP warning remains until dockerfile/Dockerfile.ubi9-tahaa-bootstrap-docker is rebuilt and pushed." >&2
               fi
-              exec dockerd --host=tcp://0.0.0.0:2375 "$iptables_arg" --ip6tables=false --storage-driver=overlay2 --data-root=/var/lib/docker --exec-opt native.cgroupdriver=cgroupfs
+              exec dockerd --host=tcp://0.0.0.0:2375 --iptables=false --ip6tables=false "${tls_args[@]}" --storage-driver=overlay2 --data-root=/var/lib/docker --exec-opt native.cgroupdriver=cgroupfs
           securityContext:
             privileged: true
           ports:
