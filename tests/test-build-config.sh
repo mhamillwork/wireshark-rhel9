@@ -141,4 +141,17 @@ set -e
 [ "$bad_status" -ne 0 ] || fail "BUILD_TYPE=nightly was accepted"
 printf '%s\n' "$bad_type" | grep -q 'dev or release' || fail "build type error was: $bad_type"
 
+(
+  # shellcheck disable=SC1091
+  source "$root/src/scripts/lib/build-config.sh"
+  pinned="$(CHECKOUT_ROOT="$root" build_checkout_root)"
+  [ "$pinned" = "$root" ] || fail "CHECKOUT_ROOT resolved to $pinned"
+  set +e
+  bad_root="$(CHECKOUT_ROOT="$tmp/missing" build_checkout_root 2>&1)"
+  bad_root_status=$?
+  set -e
+  [ "$bad_root_status" -ne 0 ] || fail "missing CHECKOUT_ROOT was accepted"
+  printf '%s\n' "$bad_root" | grep -q 'CHECKOUT_ROOT is not a checkout' || fail "CHECKOUT_ROOT error was: $bad_root"
+)
+
 echo "build-config tests passed"

@@ -27,6 +27,16 @@ build_repo_root() {
 # checkout at /workspace.
 build_checkout_root() {
   local dir
+  # run-compile-image.sh sets this so a remote container uses the copied
+  # checkout. The compile image also has the sources at /src, and Wireshark
+  # ships its own .gitlab-ci.yml under that tree.
+  if [ -n "${CHECKOUT_ROOT:-}" ]; then
+    if [ -f "${CHECKOUT_ROOT}/.gitlab-ci.yml" ]; then
+      printf '%s\n' "$CHECKOUT_ROOT"
+      return 0
+    fi
+    build_fail "CHECKOUT_ROOT is not a checkout: ${CHECKOUT_ROOT}"
+  fi
   dir="$(build_scripts_dir)"
   while [ "$dir" != "/" ]; do
     if [ -f "$dir/.gitlab-ci.yml" ]; then

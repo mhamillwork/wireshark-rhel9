@@ -2,7 +2,7 @@
 # Run a command in the compile image.
 # A local daemon bind-mounts the checkout. A remote daemon (DOCKER_HOST=tcp://...)
 # cannot see that path, so the checkout is copied to /workspace and
-# src/build plus src/artifacts are copied back.
+# src/build plus src/artifacts are copied back when the command created them.
 set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -67,7 +67,12 @@ own_remote_outputs() {
 
 copy_back() {
   local name="$1" rel stage
+  # docker cp of a missing path prints "Could not find the file" and is
+  # not a failed command. Validate does not create either directory.
   for rel in src/build src/artifacts; do
+    if ! docker exec "$name" test -d "/workspace/${rel}"; then
+      continue
+    fi
     stage="$(mktemp -d)"
     if docker cp "${name}:/workspace/${rel}" "${stage}/tree"; then
       rm -rf "${root:?}/${rel}"
@@ -89,7 +94,7 @@ run_remote() {
   docker start "$name" >/dev/null
   wait_for_workspace "$name"
   docker cp "${root}/." "${name}:/workspace/"
-  docker exec -w /workspace "$name" "$@" || status=$?
+  docker exec -e CHECKOUT_ROOT=/workspace -w /workspace "$name" "$@" || status=$?
   own_remote_outputs "$name"
   copy_back "$name"
   return "$status"
