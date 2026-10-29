@@ -1,81 +1,48 @@
-# RHEL 9 build. The compile-image job builds
-# dockerfile/Dockerfile.wireshark-ubi9-build and tags it wireshark-ubi9:dev.
-# That build reaches Satellite with --add-host. Later jobs docker run that
-# local tag. GitLab does not pull wireshark-ubi9:dev. The job image is
-# ubi9-tahaa-bootstrap-docker, the bootstrap image plus the Docker client.
-# The compile and runtime Dockerfiles still FROM ubi9-tahaa-bootstrap.
-#
-# The job needs that client and the engine socket. A shell runner has both
-# on the host. A Docker executor must mount /var/run/docker.sock into the job.
-# compile-image and the jobs that run the compile image must use the same
-# Docker daemon, because the tag stays on that daemon.
+# RHEL 9 compile test. The runner pulls the compile image
+# artifactory.tahaa.local/tahaa-image-local/wireshark:dev.
+# Build that image from dockerfile/Dockerfile.wireshark-ubi9-build and
+# push it by hand. These jobs compile the Git checkout with the tools in
+# that image. They do not build or publish container images.
 #
 # Do not set image pull_policy. This runner's allowed_pull_policies list is
 # empty, so a policy in this file is rejected before the job starts.
 #
-# BUILD_TYPE defaults to dev. A dev pipeline publishes development image
-# tags only. It does not publish the release images or the RPM.
-#
-# BUILD_TYPE=release publishes, from versions/RHEL9.env:
-#   oci://<registry>/<image-repo>/<image>:<version>-ppv<plugin>-rhel<rhel>
-#   oci://<registry>/<image-repo>/<image>:<version>-ppv<plugin>-rhel<rhel>-build
-#   the RPM into <registry>/artifactory/<rpm-repo>/
-# Docker pushes the same image names without the oci:// scheme.
-# Release publish also requires the matching protected Git tag.
-# A BUILD_TYPE variable by itself cannot publish a release.
+# BUILD_TYPE defaults to dev. The pipeline records the value and does not
+# publish from it.
 
 stages:
-  - image
   - validate
   - compile
   - test
   - rpm
   - package-test
-  - docker
-  - publish
 
 variables:
-  BOOTSTRAP_IMAGE: artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap-docker:9.8
-  WIRESHARK_IMAGE: wireshark-ubi9:dev
-  # Runtime image. A separate tag so the build does not replace the compile image.
-  LOCAL_IMAGE: wireshark-ppv:candidate
+  COMPILE_IMAGE: artifactory.tahaa.local/tahaa-image-local/wireshark:dev
   BUILD_TYPE:
     value: "dev"
     options:
       - "dev"
       - "release"
-    description: "dev is the default. release publishes the release images and the RPM from the protected Git tag"
-  ARTIFACTORY_REGISTRY: artifactory.tahaa.local
-  ARTIFACTORY_REPOSITORY: tahaa-image-local
+    description: "Recorded by the validate job. This pipeline does not publish"
 
 default:
   image:
-    name: $BOOTSTRAP_IMAGE
+    name: $COMPILE_IMAGE
     entrypoint: [""]
   interruptible: true
 
-compile-image:
-  stage: image
-  script:
-    - command -v docker >/dev/null 2>&1 || { echo "docker is required to build the compile image" >&2; exit 1; }
-    - |
-      docker build \
-        --add-host satellite9b.hsv.local:10.10.106.59 \
-        -f dockerfile/Dockerfile.wireshark-ubi9-build \
-        -t "${WIRESHARK_IMAGE}" .
-
 validate:
   stage: validate
-  needs: ["compile-image"]
   script:
-    - ./src/scripts/run-compile-image.sh ./src/scripts/validate-repo.sh
+    - ./src/scripts/validate-repo.sh
     - test "$BUILD_TYPE" = dev -o "$BUILD_TYPE" = release
 
 compile:
   stage: compile
   needs: ["validate"]
   script:
-    - ./src/scripts/run-compile-image.sh ./src/scripts/compile-wireshark.sh --rhel 9 --build
+    - ./src/scripts/compile-wireshark.sh --rhel 9 --build
   artifacts:
     paths:
       - src/build/rhel9/wireshark/run/
@@ -86,7 +53,7 @@ test-compile:
   stage: test
   needs: ["compile"]
   script:
-    - ./src/scripts/run-compile-image.sh ./src/scripts/compile-wireshark.sh --rhel 9 --test
+    - ./src/scripts/compile-wireshark.sh --rhel 9 --test
   artifacts:
     paths:
       - src/build/rhel9/logs/
@@ -96,7 +63,7 @@ rpm:
   stage: rpm
   needs: ["test-compile"]
   script:
-    - ./src/scripts/run-compile-image.sh ./src/scripts/compile-wireshark.sh --rhel 9 --package
+    - ./src/scripts/compile-wireshark.sh --rhel 9 --package
   artifacts:
     paths:
       - src/artifacts/rpms/rhel9/
@@ -108,76 +75,8 @@ package-test:
   stage: package-test
   needs: ["rpm"]
   script:
-    - ./src/scripts/run-compile-image.sh ./src/scripts/test-rpm.sh
+    - ./src/scripts/test-rpm.sh
   artifacts:
     paths:
       - src/build/rhel9/logs/package-test.txt
     expire_in: 14 days
-
-docker-image:
-  stage: docker
-  needs:
-    - job: package-test
-    - job: rpm
-      artifacts: true
-  script:
-    - ./src/scripts/write-build-metadata.sh
-    - test -n "$(find src/artifacts/rpms/rhel9 -name '*.rpm' -print -quit)"
-    - |
-      set -euo pipefail
-      command -v docker >/dev/null 2>&1 || { echo "docker is required to build the runtime image" >&2; exit 1; }
-      set -a
-      # shellcheck disable=SC1091
-      . ./versions/RHEL9.env
-      set +a
-      docker build --add-host satellite9b.hsv.local:10.10.106.59 \
-        -f dockerfile/Dockerfile.wireshark-ubi9-runtime \
-        --build-arg "WIRESHARK_VERSION=${WIRESHARK_VERSION}" \
-        --build-arg "PACKET_PENGUIN_VERSION=${PACKET_PENGUIN_VERSION}" \
-        --build-arg "RHEL_VERSION=${RHEL_VERSION}" \
-        --build-arg "GIT_COMMIT=${CI_COMMIT_SHA:-local}" \
-        --build-arg "BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-        --build-arg "PIPELINE_ID=${CI_PIPELINE_ID:-local}" \
-        --build-arg "BUILD_TYPE=${BUILD_TYPE}" \
-        --build-arg "RPM_DIR=src/artifacts/rpms/rhel${RHEL_VERSION}" \
-        -t "${LOCAL_IMAGE}" .
-      # The image command is the GUI. This job has no display, so both
-      # binaries are checked with the offscreen Qt platform.
-      docker run --rm -e QT_QPA_PLATFORM=offscreen "${LOCAL_IMAGE}" /usr/local/bin/tshark -v
-      docker run --rm -e QT_QPA_PLATFORM=offscreen "${LOCAL_IMAGE}" /usr/local/bin/wireshark --version
-      mkdir -p src/artifacts
-      docker save -o src/artifacts/wireshark-image.tar "${LOCAL_IMAGE}"
-  artifacts:
-    paths:
-      - src/artifacts/build-metadata.json
-      - src/artifacts/wireshark-image.tar
-    expire_in: 7 days
-
-publish:
-  stage: publish
-  needs:
-    - job: docker-image
-    - job: rpm
-      artifacts: true
-  resource_group: wireshark-artifactory
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      when: never
-    - if: '$BUILD_TYPE == "release" && $CI_COMMIT_REF_PROTECTED == "true" && $CI_COMMIT_TAG'
-    - if: '$BUILD_TYPE == "dev" && $CI_COMMIT_BRANCH'
-    - when: never
-  script:
-    - |
-      set -euo pipefail
-      command -v docker >/dev/null 2>&1 || { echo "docker is required to publish" >&2; exit 1; }
-      docker load -i src/artifacts/wireshark-image.tar
-    - ./src/scripts/publish-image.sh
-    - |
-      if [ "${BUILD_TYPE}" = release ]; then
-        ./src/scripts/publish-rpm.sh
-      fi
-    - ./src/scripts/write-build-metadata.sh
-  artifacts:
-    paths:
-      - src/artifacts/build-metadata.json
-    expire_in: 30 days
