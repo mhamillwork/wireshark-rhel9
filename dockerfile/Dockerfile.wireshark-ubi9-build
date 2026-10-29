@@ -1,7 +1,10 @@
 # Compile image, tagged wireshark-ubi9:dev.
 #
 #   docker build --add-host satellite9b.hsv.local:10.10.106.59 \
-#     -f dockerfile/Dockerfile.wireshark-ubi9-build -t wireshark-ubi9:dev .
+#     -f dockerfile/Dockerfile.wireshark-ubi9-build \
+#     -t wireshark-ubi9:dev \
+#     -t artifactory.tahaa.local/tahaa-image-local/wireshark:dev .
+#   docker push artifactory.tahaa.local/tahaa-image-local/wireshark:dev
 #
 # The base is the TAHAA UBI 9.8 bootstrap. It already carries the
 # isolated-network certificates, yum repositories, and hosts file. The rhsm

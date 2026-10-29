@@ -43,10 +43,10 @@ if grep -q 'pull_policy:' .gitlab-ci.yml; then
   build_fail "GitLab CI sets pull_policy, which this runner's empty allowed_pull_policies list rejects"
 fi
 grep -q 'value: "dev"' .gitlab-ci.yml || build_fail "GitLab BUILD_TYPE default is not dev"
-grep -q 'CI_COMMIT_REF_PROTECTED' .gitlab-ci.yml || build_fail "GitLab release publish is not limited to a protected ref"
-grep -q 'CI_COMMIT_TAG' .gitlab-ci.yml || build_fail "GitLab release publish is not limited to the release Git tag"
 grep -q 'tahaa-rpm-local' versions/RHEL9.env || build_fail "versions file is missing the RPM repository"
-grep -q 'publish-rpm.sh' .gitlab-ci.yml || build_fail "GitLab publish job does not upload the RPM"
+if grep -q 'publish-rpm.sh' .gitlab-ci.yml || grep -q 'publish-image.sh' .gitlab-ci.yml; then
+  build_fail "GitLab publishes images or the RPM; those steps run by hand"
+fi
 grep -q '^Name:[[:space:]]*wireshark$' src/rpmbuild/RHEL-9/SPECS/wireshark.spec.in || build_fail "RPM spec template is missing the package name"
 grep -q 'cap_net_raw,cap_net_admin=ep' src/scripts/build-rpm.sh || build_fail "RPM file list does not grant dumpcap capture capabilities"
 grep -qxF 'src/build' .dockerignore || build_fail "compile image dockerignore does not exclude src/build"
@@ -57,7 +57,7 @@ grep -qxF 'src/wireshark-*/build' .dockerignore || build_fail "compile image doc
 grep -q 'src/build' dockerfile/Dockerfile.wireshark-ubi9-build || build_fail "compile Dockerfile does not document the src/build exclusion"
 grep -q 'artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap:9.8' dockerfile/Dockerfile.wireshark-ubi9-build || build_fail "compile Dockerfile bootstrap image changed"
 grep -q 'artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap:9.8' dockerfile/Dockerfile.wireshark-ubi9-runtime || build_fail "runtime Dockerfile bootstrap image changed"
-grep -q 'artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap-docker:9.8' .gitlab-ci.yml || build_fail "GitLab job image is not the bootstrap image with the docker client"
+grep -q 'artifactory.tahaa.local/tahaa-image-local/wireshark:dev' .gitlab-ci.yml || build_fail "GitLab job image is not the pushed compile image"
 grep -q 'artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap:9.8' dockerfile/Dockerfile.ubi9-tahaa-bootstrap-docker || build_fail "job image Dockerfile does not start from the bootstrap image"
 grep -q 'docker-ce-cli' dockerfile/Dockerfile.ubi9-tahaa-bootstrap-docker || build_fail "job image Dockerfile does not install the Docker client"
 if grep -q 'install docker;' dockerfile/Dockerfile.ubi9-tahaa-bootstrap-docker || grep -q 'install docker ' dockerfile/Dockerfile.ubi9-tahaa-bootstrap-docker; then
@@ -66,9 +66,11 @@ fi
 grep -q 'qt5-qtbase-gui' dockerfile/Dockerfile.wireshark-ubi9-runtime || build_fail "runtime image is missing the Qt xcb platform package"
 grep -q 'QT_X11_NO_MITSHM=1' dockerfile/Dockerfile.wireshark-ubi9-runtime || build_fail "runtime image is missing QT_X11_NO_MITSHM"
 grep -q '/usr/local/bin/wireshark' dockerfile/Dockerfile.wireshark-ubi9-runtime || build_fail "runtime image command is not the Wireshark GUI"
-grep -q 'Dockerfile.wireshark-ubi9-build' .gitlab-ci.yml || build_fail "GitLab does not build the compile Dockerfile"
-grep -q 'run-compile-image.sh' .gitlab-ci.yml || build_fail "GitLab compile jobs do not run inside the compile image"
-grep -q 'Dockerfile.wireshark-ubi9-runtime' .gitlab-ci.yml || build_fail "GitLab docker job does not build the runtime Dockerfile"
+grep -q 'Dockerfile.wireshark-ubi9-build' .gitlab-ci.yml || build_fail "GitLab does not name the compile Dockerfile"
+grep -q 'compile-wireshark.sh --rhel 9 --build' .gitlab-ci.yml || build_fail "GitLab does not compile in the job image"
+if grep -q 'run-compile-image.sh' .gitlab-ci.yml || grep -q 'docker build' .gitlab-ci.yml; then
+  build_fail "GitLab builds or runs a container; the compile image is pushed by hand"
+fi
 grep -q -- '--add-host satellite9b.hsv.local:10.10.106.59' README.md || build_fail "README compile build is missing the Satellite host"
 grep -q 'Dockerfile.wireshark-ubi9-runtime' README.md || build_fail "README is missing the runtime image build"
 grep -q -- '--package' README.md || build_fail "README is missing the manual package command"
@@ -77,8 +79,7 @@ if grep -RIn --exclude-dir=.git --exclude=validate-repo.sh -i -e podman README.m
   grep -RIn --exclude-dir=.git --exclude=validate-repo.sh -i -e podman README.md docs .gitlab-ci.yml dockerfile src/scripts >&2 || true
   exit 1
 fi
-grep -q -- '--add-host satellite9b.hsv.local:10.10.106.59' .gitlab-ci.yml || build_fail "GitLab runtime build is missing the Satellite host"
-grep -q 'QT_QPA_PLATFORM=offscreen' .gitlab-ci.yml || build_fail "GitLab docker job would start the GUI with no display"
+grep -q 'artifactory.tahaa.local/tahaa-image-local/wireshark:dev' README.md || build_fail "README does not name the pushed compile image"
 if grep -q 'AS runtime' dockerfile/Dockerfile.wireshark-ubi9-build; then
   build_fail "compile Dockerfile still contains the runtime stage"
 fi

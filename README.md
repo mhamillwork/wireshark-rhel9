@@ -24,7 +24,9 @@ Build on the isolated network, where `artifactory.tahaa.local/tahaa-image-local/
 docker build \
   --add-host satellite9b.hsv.local:10.10.106.59 \
   -f dockerfile/Dockerfile.wireshark-ubi9-build \
-  -t wireshark-ubi9:dev .
+  -t wireshark-ubi9:dev \
+  -t artifactory.tahaa.local/tahaa-image-local/wireshark:dev .
+docker push artifactory.tahaa.local/tahaa-image-local/wireshark:dev
 ```
 
 ## Environment
@@ -35,7 +37,7 @@ The runtime image sets `QT_X11_NO_MITSHM=1`. It still leaves `DISPLAY` unset: pa
 
 ## GitLab CI
 
-Push this repository to the isolated GitLab. Jobs run in `artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap-docker:9.8`. Build that image from `dockerfile/Dockerfile.ubi9-tahaa-bootstrap-docker`. It is the bootstrap image plus the Docker client. The first job builds `dockerfile/Dockerfile.wireshark-ubi9-build` on the runner, which can reach Satellite, and tags it `wireshark-ubi9:dev`. That Dockerfile still starts FROM `ubi9-tahaa-bootstrap:9.8`. The compile jobs then run inside the compile image. `BUILD_TYPE` defaults to `dev`. A development pipeline validates, compiles, tests, builds the RPM, and publishes development image tags. It does not publish the release images or the RPM. `BUILD_TYPE=release` publishes those, and only from the matching protected Git tag. Override the compile image name with CI variable `WIRESHARK_IMAGE` if the loaded tag is different. Details are in `docs/RHEL9-BUILD.md`.
+Push this repository to the isolated GitLab. Jobs run in `artifactory.tahaa.local/tahaa-image-local/wireshark:dev`, the compile image built above and pushed by hand. Push it again when that Dockerfile or the Satellite packages change. A source change does not need a new image: the jobs compile the Git checkout with the compiler already in the image. The pipeline validates, compiles, tests, and builds the RPM. It does not build or publish container images. `BUILD_TYPE` defaults to `dev` and is only recorded. Details are in `docs/RHEL9-BUILD.md`.
 
 The compile job saves `src/build/rhel9/wireshark/run/`. The build is also installed to `/usr/local`, which gives plugins `WiresharkConfig.cmake` and the libraries they link.
 

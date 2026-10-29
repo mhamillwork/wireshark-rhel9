@@ -79,16 +79,16 @@ rpm -qpl src/artifacts/rpms/rhel9/*.rpm
 
 The compile image and the runtime image are separate Dockerfiles. They share the bootstrap `artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap:9.8`, which already has the isolated-network certificates and repositories. They do not inherit each other: the published image does not contain the compiler. Do not turn TLS verification off.
 
-`dockerfile/Dockerfile.ubi9-tahaa-bootstrap-docker` is the GitLab job image. It starts FROM that bootstrap and installs `docker-ce-cli`, git, and the archive tools the runner uses. The tag is `artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap-docker:9.8`. The engine stays on the runner. Build it with Docker Engine. `docker version` has to show a Server section from that engine. A failure from `fuse-overlayfs` while mounting `/var/lib/containers/storage` means the `docker` command on that machine is not Docker Engine.
+`dockerfile/Dockerfile.wireshark-ubi9-build` is the compile image. The local tag is `wireshark-ubi9:dev`, which `docker compose up` uses. GitLab pulls `artifactory.tahaa.local/tahaa-image-local/wireshark:dev`. Build it on a machine whose `docker version` shows a Server section, then push that tag. Push again when the Dockerfile or the Satellite packages change. A failure from `fuse-overlayfs` while mounting `/var/lib/containers/storage` means the `docker` command on that machine is not Docker Engine.
 
 ```bash
 docker build \
   --add-host satellite9b.hsv.local:10.10.106.59 \
-  -f dockerfile/Dockerfile.ubi9-tahaa-bootstrap-docker \
-  -t artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap-docker:9.8 .
+  -f dockerfile/Dockerfile.wireshark-ubi9-build \
+  -t wireshark-ubi9:dev \
+  -t artifactory.tahaa.local/tahaa-image-local/wireshark:dev .
+docker push artifactory.tahaa.local/tahaa-image-local/wireshark:dev
 ```
-
-`dockerfile/Dockerfile.wireshark-ubi9-build` is the compile image, tagged `wireshark-ubi9:dev`. `docker compose up` uses that image. It does not require the runtime image to exist.
 
 `dockerfile/Dockerfile.wireshark-ubi9-runtime` is the image that gets published. It installs the RPM from `src/artifacts/rpms/rhel9/` and the packages the GUI needs on top of what the RPM requires. `install_weak_deps=0` drops recommended plugins, so the file names `qt5-qtbase-gui` (the xcb platform plugin `libqxcb.so`), `qt5-qtsvg`, `qt5-qtmultimedia`, `qt5-qtimageformats`, DejaVu fonts, fontconfig, the X11 and xcb libraries, `libxkbcommon-x11`, `mesa-libGL`, the icon theme, `dbus-libs`, and `glib2`. The image sets `QT_X11_NO_MITSHM=1` and `XDG_RUNTIME_DIR`. It does not set `DISPLAY` or `QT_QPA_PLATFORM`. Its command is `/usr/local/bin/wireshark`. Build it on the isolated network. `dnf` uses `satellite9b.hsv.local`, and the build container does not resolve that name, so the command passes the host mapping.
 
@@ -131,9 +131,9 @@ docker run --rm \
 
 ## GitLab
 
-`BUILD_TYPE` defaults to `dev`. A manual pipeline can select `dev` or `release`. Selecting `release` on an ordinary branch does not publish.
+`BUILD_TYPE` defaults to `dev`. The pipeline records `dev` or `release` and does not publish either one.
 
-Stages, in order: image, validate, compile, test, rpm, package-test, docker, publish. Publish does not run unless the earlier jobs passed. The rpm job still builds the RPM for the runtime image on a dev pipeline. The RPM is uploaded only when the pipeline is a release.
+Stages, in order: validate, compile, test, rpm, package-test. Each job runs in `artifactory.tahaa.local/tahaa-image-local/wireshark:dev` and compiles the Git checkout. The image supplies the compiler. The pipeline does not build that image and does not need a Docker engine on the runner. The pipeline does not set `pull_policy`: this runner's `allowed_pull_policies` list is empty, and a job-level policy is rejected. The rpm job compiles again: the compile job keeps `run/` and the logs, and the package step needs a fresh CMake build in that job. The runner must be able to pull the image from Artifactory and must trust that certificate. Do not disable TLS verification.
 
 Image names and the RPM filename come from `versions/RHEL9.env`:
 
@@ -150,7 +150,7 @@ oci://artifactory.tahaa.local/tahaa-image-local/wireshark:4.6.9-ppv1.0.5-rhel9-b
 https://artifactory.tahaa.local/artifactory/tahaa-rpm-local/wireshark-4.6.9-1.ppv1.0.5.el9.<arch>.rpm
 ```
 
-Docker pushes the same image names without the `oci://` scheme. The first image is the runtime image. The second is the compile image built by the `compile-image` job. The RPM goes to the `tahaa-rpm-local` repository.
+Docker pushes the same image names without the `oci://` scheme. The first image is the runtime image. The second is the compile image. The RPM goes to the `tahaa-rpm-local` repository. GitLab does not run those pushes. On a machine with Docker, `src/scripts/publish-image.sh` and `src/scripts/publish-rpm.sh` still perform them.
 
 Development tags, for the runtime image only:
 
@@ -161,7 +161,7 @@ artifactory.tahaa.local/tahaa-image-local/wireshark:4.6.9-ppv1.0.5-rhel9-dev-mha
 
 The username comes from `GITLAB_USER_LOGIN` and is sanitized. The tag with the short commit SHA is the immutable one. The username tag moves. Those tags do not replace the release runtime tag or the `-build` tag.
 
-A release is published only when all of these are true:
+`src/scripts/publish-image.sh` publishes a release only when all of these are true:
 
 - `BUILD_TYPE=release`
 - the Git ref is protected (`CI_COMMIT_REF_PROTECTED=true`)
@@ -169,9 +169,7 @@ A release is published only when all of these are true:
 
 Setting `BUILD_TYPE=release` on an ordinary branch does not publish. If a release image tag or the RPM is already in Artifactory, the push stops. Prefer an immutable tag policy in Artifactory as well.
 
-The `compile-image` job runs `docker build` on `dockerfile/Dockerfile.wireshark-ubi9-build` and tags it `wireshark-ubi9:dev`. `--add-host satellite9b.hsv.local:10.10.106.59` lets that build reach Satellite. GitLab job containers use `artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap-docker:9.8`, so the runner pulls that image from Artifactory instead of pulling the local `wireshark-ubi9:dev` tag. The compile and runtime images still build FROM `ubi9-tahaa-bootstrap:9.8`. Validate, compile, test, rpm, and package-test then `docker run` the tag. The pipeline does not set `pull_policy`: this runner's `allowed_pull_policies` list is empty, and a job-level policy is rejected. Those jobs, and a release publish of the compile image, have to land on the same Docker daemon that built the tag. The runner provides the engine through a shell executor, or a Docker executor with `/var/run/docker.sock` mounted. The Docker client is in the job image. The registry must be reachable from the runner, and the runner must trust the Artifactory certificate. Do not disable TLS verification. The rpm job compiles again: the compile job keeps `run/` and the logs, and the package step needs a fresh CMake build in that job.
-
-Merge request pipelines run the checks and do not publish. A branch pipeline publishes the development tags. Release publishing is a separate manual pipeline on the protected Git tag, and a resource group keeps two publishes from pushing at the same time.
+Merge request pipelines and branch pipelines both run the compile test. Neither publishes.
 
 ## GitLab CI/CD variables
 
@@ -182,7 +180,8 @@ Merge request pipelines run the checks and do not publish. A branch pipeline pub
 | `ARTIFACTORY_REGISTRY` | no | no | Defaults to `artifactory.tahaa.local` |
 | `ARTIFACTORY_REPOSITORY` | no | no | Defaults to `tahaa-image-local` |
 | `ARTIFACTORY_RPM_REPOSITORY` | no | no | Defaults to `tahaa-rpm-local`. Used when `BUILD_TYPE=release` |
-| `BUILD_TYPE` | no | no | Defaults to `dev`. `release` publishes the release images and the RPM |
+| `BUILD_TYPE` | no | no | Defaults to `dev`. The pipeline records it and does not publish |
+| `COMPILE_IMAGE` | no | no | Defaults to `artifactory.tahaa.local/tahaa-image-local/wireshark:dev` |
 
 Mask both registry variables. Protect them when development pipelines run on a protected branch such as `main`: a protected variable is not visible to an unprotected branch, so those pipelines cannot log in. A release still cannot be published from a variable alone. It also needs the protected Git tag. The scripts never print the password. `artifacts/build-metadata.json` records versions, commit, pipeline id, and image tag, and does not contain credentials.
 
@@ -201,5 +200,5 @@ Edit `versions/RHEL9.env` and rename `src/wireshark-$WIRESHARK_VERSION` so the d
 - `ninja: error: dependency cycle: .../plugin.c -> .../plugin.c`: `register_plugin_files` was given `plugin.c`, which is the file Wireshark 4.6.9 generates. Pass `${DISSECTOR_SRC}` to that command, and keep `plugin.c` only in `PLUGIN_FILES`. Clean the CMake build directory and compile again.
 - `libwireshark.so.19: cannot open shared object file`: the build-tree binary's RPATH is `$ORIGIN/../lib64` while the libraries are in `run/`. From a checkout whose scripts live in `/src/scripts`, the binary is `/src/build/rhel9/wireshark/run/tshark`. Re-run the compile script so it recreates `src/build/rhel9/wireshark/lib64`, or link the libraries yourself: `mkdir -p /src/build/rhel9/wireshark/lib64` and `ln -sfn "../run/<library>"` for each `lib*.so*` in `run/`. The version check also accepts `LD_LIBRARY_PATH` pointed at `run/`.
 - `rpmbuild is not installed`: rebuild the compile image; `rpm-build` is installed by `dockerfile/Dockerfile.wireshark-ubi9-build`.
-- `docker is required`: the docker and publish jobs need Docker on the runner.
+- `docker is required`: a local image build or a hand publish needs Docker on that machine. The GitLab jobs do not.
 - Registry login failed: check the masked variables, DNS for `artifactory.tahaa.local`, and the CA trust. Do not pass `--tls-verify=false`.
