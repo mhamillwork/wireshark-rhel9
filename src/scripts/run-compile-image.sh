@@ -10,6 +10,11 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/lib/build-config.sh"
 
 [ "$#" -ge 1 ] || build_fail "usage: run-compile-image.sh <command> [args...]"
+case "${DOCKER_HOST:-}" in
+  tcp:*)
+    unset DOCKER_TLS_VERIFY DOCKER_CERT_PATH DOCKER_BUILDKIT
+    ;;
+esac
 command -v docker >/dev/null 2>&1 || build_fail "docker is required"
 
 image="${WIRESHARK_IMAGE:-wireshark-ubi9:dev}"

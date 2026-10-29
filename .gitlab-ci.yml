@@ -10,13 +10,15 @@
 # k8s/wireshark-docker.yaml. Its objects are in the gitlab namespace, with
 # the runner. That Deployment runs dockerd from this same image, privileged,
 # and keeps the local tags on its volume. DOCKER_HOST below points every job
-# at that Service. A shell runner with its own engine overrides DOCKER_HOST
-# to unix:///var/run/docker.sock.
+# at that Service. The engine listens with plain HTTP. Do not set a TLS
+# verify flag or a certificate path: the client then posts to https:// and
+# the engine answers with HTTP. A shell runner with its own engine overrides
+# DOCKER_HOST to unix:///var/run/docker.sock.
 # compile-image and the jobs that run the compile image must use the same
 # Docker daemon, because the tag stays on that daemon.
 #
-# DOCKER_BUILDKIT=0 uses the engine's built-in builder. The job image does
-# not need a separate buildx package for docker build.
+# Leave BuildKit enabled. Setting it off selects the legacy builder, which
+# this Docker client warns will be removed.
 #
 # Do not set image pull_policy. This runner's allowed_pull_policies list is
 # empty, so a policy in this file is rejected before the job starts.
@@ -44,13 +46,8 @@ stages:
 
 variables:
   BOOTSTRAP_IMAGE: artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap-docker:9.8
-  # In-cluster engine from k8s/wireshark-docker.yaml. TLS is required once
-  # the job image contains /etc/docker/tls. before_script drops it when the
-  # running engine is still the plaintext one.
+  # Plain HTTP. The running engine does not use TLS.
   DOCKER_HOST: tcp://wireshark-docker:2375
-  DOCKER_TLS_VERIFY: "1"
-  DOCKER_CERT_PATH: /etc/docker/tls
-  DOCKER_BUILDKIT: "0"
   WIRESHARK_IMAGE: wireshark-ubi9:dev
   # Runtime image. A separate tag so the build does not replace the compile image.
   LOCAL_IMAGE: wireshark-ppv:candidate
@@ -68,18 +65,13 @@ default:
     name: $BOOTSTRAP_IMAGE
     entrypoint: [""]
   interruptible: true
-  before_script:
-    - |
-      if [ ! -f /etc/docker/tls/ca.pem ]; then
-        unset DOCKER_TLS_VERIFY
-        unset DOCKER_CERT_PATH
-      fi
 
 compile-image:
   stage: image
   script:
-    - command -v docker >/dev/null 2>&1 || { echo "docker is required to build the compile image" >&2; exit 1; }
     - |
+      unset DOCKER_TLS_VERIFY DOCKER_CERT_PATH DOCKER_BUILDKIT
+      command -v docker >/dev/null 2>&1 || { echo "docker is required to build the compile image" >&2; exit 1; }
       docker build \
         --network=host \
         --add-host satellite9b.hsv.local:10.10.106.59 \
@@ -147,6 +139,7 @@ docker-image:
     - test -n "$(find src/artifacts/rpms/rhel9 -name '*.rpm' -print -quit)"
     - |
       set -euo pipefail
+      unset DOCKER_TLS_VERIFY DOCKER_CERT_PATH DOCKER_BUILDKIT
       command -v docker >/dev/null 2>&1 || { echo "docker is required to build the runtime image" >&2; exit 1; }
       set -a
       # shellcheck disable=SC1091
@@ -191,6 +184,7 @@ publish:
   script:
     - |
       set -euo pipefail
+      unset DOCKER_TLS_VERIFY DOCKER_CERT_PATH DOCKER_BUILDKIT
       command -v docker >/dev/null 2>&1 || { echo "docker is required to publish" >&2; exit 1; }
       docker load -i src/artifacts/wireshark-image.tar
     - ./src/scripts/publish-image.sh
