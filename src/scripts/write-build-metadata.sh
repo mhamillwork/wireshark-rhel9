@@ -7,11 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/lib/build-config.sh"
 
 build_load_versions "${1:-${RHEL_VERSION:-9}}"
-build_type="${BUILD_TYPE:-dev}"
-case "$build_type" in
-  dev|release) ;;
-  *) build_fail "BUILD_TYPE must be dev or release" ;;
-esac
+build_type="$(build_effective_build_type)" || exit 1
 
 commit="${CI_COMMIT_SHA:-}"
 if [ -z "$commit" ]; then

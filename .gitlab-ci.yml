@@ -27,15 +27,19 @@
 # Do not set image pull_policy. This runner's allowed_pull_policies list is
 # empty, so a policy in this file is rejected before the job starts.
 #
-# BUILD_TYPE defaults to dev. A dev pipeline publishes development image
+# BUILD_TYPE defaults to dev. A branch pipeline publishes development image
 # tags only. It does not publish the release images or the RPM.
 #
-# BUILD_TYPE=release publishes, from versions/RHEL9.env:
+# The release Git tag publishes, from versions/RHEL9.env, even when
+# BUILD_TYPE is still dev. GitLab starts that pipeline with the default.
+# A tag pipeline has no CI_COMMIT_BRANCH, so a dev-only publish rule
+# dropped the job and nothing was pushed.
 #   oci://<registry>/<image-repo>/<image>:<version>-ppv<plugin>-rhel<rhel>
 #   oci://<registry>/<image-repo>/<image>:<version>-ppv<plugin>-rhel<rhel>-build
 #   the RPM into <registry>/artifactory/<rpm-repo>/
 # Docker pushes the same image names without the oci:// scheme.
-# Release publish also requires the matching protected Git tag.
+# The tag has to be protected: CI_COMMIT_REF_PROTECTED=true.
+# CI_COMMIT_TAG has to equal that release tag.
 # A BUILD_TYPE variable by itself cannot publish a release.
 
 stages:
@@ -73,6 +77,7 @@ default:
 compile-image:
   stage: image
   script:
+    - ./src/scripts/release-preflight.sh
     - |
       unset DOCKER_TLS_VERIFY DOCKER_CERT_PATH DOCKER_BUILDKIT
       command -v docker >/dev/null 2>&1 || { echo "docker is required to build the compile image" >&2; exit 1; }
@@ -132,6 +137,11 @@ docker-image:
       # shellcheck disable=SC1091
       . ./versions/RHEL9.env
       set +a
+      image_build_type="${BUILD_TYPE}"
+      release_tag="${WIRESHARK_VERSION}-ppv${PACKET_PENGUIN_VERSION}-rhel${RHEL_VERSION}"
+      if [ "${CI_COMMIT_TAG:-}" = "$release_tag" ]; then
+        image_build_type=release
+      fi
       docker build --network=host --add-host satellite9b.hsv.local:10.10.106.59 \
         -f dockerfile/Dockerfile.wireshark-ubi9-runtime \
         --build-arg "WIRESHARK_VERSION=${WIRESHARK_VERSION}" \
@@ -140,7 +150,7 @@ docker-image:
         --build-arg "GIT_COMMIT=${CI_COMMIT_SHA:-local}" \
         --build-arg "BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
         --build-arg "PIPELINE_ID=${CI_PIPELINE_ID:-local}" \
-        --build-arg "BUILD_TYPE=${BUILD_TYPE}" \
+        --build-arg "BUILD_TYPE=${image_build_type}" \
         --build-arg "RPM_DIR=src/artifacts/rpms/rhel${RHEL_VERSION}" \
         -t "${LOCAL_IMAGE}" .
       # The image command is the GUI. This job has no display, so both
@@ -159,8 +169,12 @@ publish:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       when: never
-    - if: '$BUILD_TYPE == "release" && $CI_COMMIT_REF_PROTECTED == "true" && $CI_COMMIT_TAG'
-    - if: '$BUILD_TYPE == "dev" && $CI_COMMIT_BRANCH'
+    # Every branch and every tag. The release tag publishes the release
+    # images and the RPM even when BUILD_TYPE is still dev. The scripts
+    # require CI_COMMIT_REF_PROTECTED=true and CI_COMMIT_TAG equal to the
+    # release tag. Leaving the job out hid that failure.
+    - if: '$CI_COMMIT_TAG'
+    - if: '$CI_COMMIT_BRANCH'
     - when: never
   script:
     - |
@@ -169,9 +183,16 @@ publish:
       command -v docker >/dev/null 2>&1 || { echo "docker is required to publish" >&2; exit 1; }
       docker image inspect "${LOCAL_IMAGE}" >/dev/null 2>&1 || { echo "runtime image ${LOCAL_IMAGE} is not on this Docker daemon" >&2; exit 1; }
     - ./src/scripts/run-compile-image.sh true
-    - ./src/scripts/publish-image.sh
     - |
-      if [ "${BUILD_TYPE}" = release ]; then
+      set -euo pipefail
+      set -a
+      # shellcheck disable=SC1091
+      . ./versions/RHEL9.env
+      set +a
+      release_tag="${WIRESHARK_VERSION}-ppv${PACKET_PENGUIN_VERSION}-rhel${RHEL_VERSION}"
+      echo "BUILD_TYPE=${BUILD_TYPE:-dev} CI_COMMIT_TAG=${CI_COMMIT_TAG:-} CI_COMMIT_REF_PROTECTED=${CI_COMMIT_REF_PROTECTED:-} release_tag=${release_tag}"
+      ./src/scripts/publish-image.sh
+      if [ "${BUILD_TYPE:-dev}" = release ] || [ "${CI_COMMIT_TAG:-}" = "$release_tag" ]; then
         ./src/scripts/publish-rpm.sh
       fi
     - ./src/scripts/write-build-metadata.sh

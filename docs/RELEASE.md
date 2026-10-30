@@ -10,7 +10,7 @@ A release publishes three things, in this order, from the `publish` job:
 
 Those names come from `versions/RHEL9.env`. The image and the RPM use the same GitLab variables, `ARTIFACTORY_USERNAME` and `ARTIFACTORY_PASSWORD`.
 
-The pipeline does not create the Git tag. You create it, protect it, and run the pipeline on that tag with `BUILD_TYPE=release`.
+The pipeline does not create the Git tag. You create it, protect it, and run the pipeline on that tag. `BUILD_TYPE` can stay `dev`. The tag is what selects the release publish.
 
 ## Before you tag
 
@@ -29,21 +29,23 @@ git push origin 4.6.9-ppv1.0.5-rhel9
 
 With the versions in `versions/RHEL9.env` today, that name is `4.6.9-ppv1.0.5-rhel9`. After a version change, use `<WIRESHARK_VERSION>-ppv<PACKET_PENGUIN_VERSION>-rhel<RHEL_VERSION>`.
 
-In GitLab, under **Settings → Repository → Protected tags**, protect a pattern that covers this tag. An unprotected tag does not set `CI_COMMIT_REF_PROTECTED`, and the `publish` job is left out of the pipeline.
+In GitLab, under **Settings → Repository → Protected tags**, protect a pattern that covers this tag. An unprotected tag does not set `CI_COMMIT_REF_PROTECTED`. The first job then stops, and the image and the RPM are not pushed.
 
 ## Run the pipeline on the tag
 
-Pushing the tag starts a pipeline for that tag. `BUILD_TYPE` on that pipeline is still `dev`. A dev pipeline on a tag does not have a `publish` job, and it does not push the release image or the RPM.
+Pushing the tag starts a pipeline for that tag. That pipeline publishes the release runtime image, the compile image, and the RPM. `BUILD_TYPE` can stay `dev`. GitLab leaves it there, and the release tag still selects the release publish.
+
+The tag has to be protected. If it is not, the first job stops with `release publish requires a protected Git ref` and nothing is pushed.
 
 Start the release pipeline from the GitLab page for this project:
 
 1. Open **Build → Pipelines**. On older GitLab this is **CI/CD → Pipelines**.
 2. Click **New pipeline**.
 3. Change the branch dropdown from `main` to the release tag `4.6.9-ppv1.0.5-rhel9`. The field is the ref the pipeline runs on. Leave it on `main` and the pipeline does not see the tag.
-4. In **Variables**, open `BUILD_TYPE` and select `release`. It is already listed and defaults to `dev`.
+4. Leave `BUILD_TYPE` at `dev`, or select `release`. Either value publishes this tag.
 5. Click **Start**. If the button is labeled **Run pipeline**, that is the same control.
 
-A pipeline started on `main` does not see the tag, even when the tag points at the same commit. `CI_COMMIT_TAG` is set only when the pipeline ref is the tag. Selecting `release` while the dropdown still says `main` omits the `publish` job.
+A pipeline started on `main` does not see the tag, even when the tag points at the same commit. `CI_COMMIT_TAG` is set only when the pipeline ref is the tag. Selecting `release` while the dropdown still says `main` stops the publish with `release publish requires git tag 4.6.9-ppv1.0.5-rhel9`.
 
 ## What the publish job does
 
@@ -69,4 +71,4 @@ The release tags and the RPM are not replaced.
 
 Delete the existing release tag or RPM before running the release pipeline again. A log that only contains `Pushed ...-dev-...` is a development pipeline.
 
-A pipeline on the wrong tag still has a `publish` job when `BUILD_TYPE` is `release` and the tag is protected. The job then stops with `release publish requires git tag 4.6.9-ppv1.0.5-rhel9`.
+A pipeline on the wrong tag stops with `release publish requires git tag 4.6.9-ppv1.0.5-rhel9` when `BUILD_TYPE` is `release`. The first job reports that, before the image build.

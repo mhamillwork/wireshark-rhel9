@@ -10,11 +10,11 @@ source "$SCRIPT_DIR/lib/build-config.sh"
 build_load_versions "${RHEL_VERSION:-9}"
 build_layout
 mkdir -p "$BUILD_ROOT"
-build_type="${BUILD_TYPE:-dev}"
-case "$build_type" in
-  dev|release) ;;
-  *) build_fail "BUILD_TYPE must be dev or release" ;;
-esac
+build_type="$(build_effective_build_type)" || exit 1
+release="$(build_release_tag)"
+if [ "$build_type" = release ]; then
+  build_require_release_ref "$release"
+fi
 
 [ -n "${ARTIFACTORY_USERNAME:-}" ] || build_fail "ARTIFACTORY_USERNAME is unset"
 [ -n "${ARTIFACTORY_PASSWORD:-}" ] || build_fail "ARTIFACTORY_PASSWORD is unset"
@@ -23,23 +23,50 @@ command -v docker >/dev/null 2>&1 || build_fail "docker is required to publish"
 engine=docker
 
 repo="$(build_image_repo)"
-release="$(build_release_tag)"
-if [ "$build_type" = release ]; then
-  [ "${CI_COMMIT_REF_PROTECTED:-}" = "true" ] || build_fail "release publish requires a protected Git ref"
-  [ "${CI_COMMIT_TAG:-}" = "$release" ] || build_fail "release publish requires git tag $release"
-fi
+
+# Registry HTTP status for a Docker manifest. 404 means the tag is absent.
+# docker manifest inspect sometimes prints an error that does not say so.
+release_manifest_http_code() {
+  local dest="$1" host path name tag url cfg code
+  host="${dest%%/*}"
+  path="${dest#*/}"
+  tag="${path##*:}"
+  name="${path%:*}"
+  url="https://${host}/v2/${name}/manifests/${tag}"
+  command -v curl >/dev/null 2>&1 || { printf '%s\n' 000; return 0; }
+  cfg="$(mktemp)"
+  chmod 600 "$cfg"
+  build_write_curl_config "$cfg"
+  code="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --config "$cfg" \
+    --header 'Accept: application/vnd.docker.distribution.manifest.v2+json' \
+    --head "$url" || true)"
+  rm -f "$cfg"
+  printf '%s\n' "${code:-000}"
+}
 
 publish_ref() {
   local source_image="$1"
   local dest="$2"
   local protect="$3"
+  local inspect_text http_code
   if [ "$protect" = 1 ]; then
     if "$engine" manifest inspect "$dest" >"$BUILD_ROOT/manifest-inspect.txt" 2>&1; then
       build_fail "release tag already exists and will not be overwritten: $dest"
     fi
-    if ! grep -Eiq 'manifest unknown|not found|404|no such manifest' "$BUILD_ROOT/manifest-inspect.txt"; then
-      echo "error: could not confirm that the release tag is absent: $dest" >&2
-      exit 1
+    inspect_text="$(cat "$BUILD_ROOT/manifest-inspect.txt")"
+    if ! build_registry_error_means_absent "$inspect_text"; then
+      http_code="$(release_manifest_http_code "$dest")"
+      case "$http_code" in
+        404) ;;
+        200) build_fail "release tag already exists and will not be overwritten: $dest" ;;
+        *)
+          echo "error: could not confirm that the release tag is absent: $dest" >&2
+          echo "docker manifest inspect said:" >&2
+          printf '%s\n' "$inspect_text" >&2
+          echo "registry HTTP status: ${http_code}" >&2
+          exit 1
+          ;;
+      esac
     fi
   fi
   if ! "$engine" image inspect "$source_image" >/dev/null 2>&1; then
