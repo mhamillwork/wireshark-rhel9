@@ -132,7 +132,7 @@ grep -q 'not supported' "$tmp/rhel8.out" || fail "RHEL 8 failure did not explain
 (
   export BUILD_ROOT="$tmp/publish-build"
   set +e
-  dev_rpm="$(BUILD_TYPE=dev "$root/src/scripts/publish-rpm.sh" 2>&1)"
+  dev_rpm="$(CI_COMMIT_TAG='' BUILD_TYPE=dev "$root/src/scripts/publish-rpm.sh" 2>&1)"
   dev_rpm_status=$?
   set -e
   [ "$dev_rpm_status" -ne 0 ] || fail "dev RPM publish was accepted"
@@ -180,6 +180,68 @@ printf '%s\n' "$bad_type" | grep -q 'dev or release' || fail "build type error w
   set -e
   [ "$bad_root_status" -ne 0 ] || fail "missing CHECKOUT_ROOT was accepted"
   printf '%s\n' "$bad_root" | grep -q 'CHECKOUT_ROOT is not a checkout' || fail "CHECKOUT_ROOT error was: $bad_root"
+)
+
+(
+  # shellcheck disable=SC1091
+  source "$root/src/scripts/lib/build-config.sh"
+  build_load_versions 9
+  release_tag="$(build_release_tag)"
+  [ "$(BUILD_TYPE=dev CI_COMMIT_TAG='' build_effective_build_type)" = dev ] || fail "dev pipeline was treated as a release"
+  [ "$(BUILD_TYPE=release CI_COMMIT_TAG='' build_effective_build_type)" = release ] || fail "BUILD_TYPE=release was ignored"
+  [ "$(BUILD_TYPE=dev CI_COMMIT_TAG="$release_tag" build_effective_build_type)" = release ] || fail "release tag was left on the dev publish path"
+  [ "$(BUILD_TYPE=dev CI_COMMIT_TAG='other-tag' build_effective_build_type)" = dev ] || fail "an ordinary tag was treated as a release"
+  build_registry_error_means_absent 'manifest unknown: The named manifest is not known to the registry.' || fail "a missing manifest was not recognized"
+  if build_registry_error_means_absent 'denied: requested access to the resource is denied'; then
+    fail "a permission error was treated as a missing tag"
+  fi
+  curl_cfg="$tmp/curl.cfg"
+  ARTIFACTORY_USERNAME=publisher ARTIFACTORY_PASSWORD='secret#with-hash' build_write_curl_config "$curl_cfg"
+  expected_auth="$(printf '%s:%s' publisher 'secret#with-hash' | base64 -w 0)"
+  grep -q "$expected_auth" "$curl_cfg" || fail "curl config dropped the part of the password after #"
+  if grep -q 'secret#with-hash' "$curl_cfg"; then
+    fail "curl config contains the password"
+  fi
+)
+
+release_tag="$(
+  # shellcheck disable=SC1091
+  source "$root/src/scripts/lib/build-config.sh"
+  build_load_versions 9
+  build_release_tag
+)"
+
+set +e
+preflight_out="$(CI_COMMIT_REF_PROTECTED=false CI_COMMIT_TAG="$release_tag" BUILD_TYPE=dev "$root/src/scripts/release-preflight.sh" 2>&1)"
+preflight_status=$?
+set -e
+[ "$preflight_status" -ne 0 ] || fail "unprotected release tag passed preflight"
+printf '%s\n' "$preflight_out" | grep -q 'protected Git ref' || fail "preflight said: $preflight_out"
+
+CI_COMMIT_REF_PROTECTED=true CI_COMMIT_TAG="$release_tag" BUILD_TYPE=dev "$root/src/scripts/release-preflight.sh" >/dev/null
+CI_COMMIT_REF_PROTECTED=false CI_COMMIT_TAG='' BUILD_TYPE=dev "$root/src/scripts/release-preflight.sh" >/dev/null
+
+(
+  export BUILD_ROOT="$tmp/publish-build"
+  set +e
+  tag_dev="$(CI_COMMIT_REF_PROTECTED=false CI_COMMIT_TAG="$release_tag" ARTIFACTORY_USERNAME=user ARTIFACTORY_PASSWORD=secret BUILD_TYPE=dev "$root/src/scripts/publish-image.sh" 2>&1)"
+  tag_dev_status=$?
+  set -e
+  [ "$tag_dev_status" -ne 0 ] || fail "unprotected release tag published with BUILD_TYPE=dev"
+  printf '%s\n' "$tag_dev" | grep -q 'protected Git ref' || fail "release tag with BUILD_TYPE=dev said: $tag_dev"
+  if printf '%s\n' "$tag_dev" | grep -q 'login'; then
+    fail "release tag with BUILD_TYPE=dev reached registry login: $tag_dev"
+  fi
+
+  set +e
+  tag_rpm_dev="$(CI_COMMIT_REF_PROTECTED=false CI_COMMIT_TAG="$release_tag" ARTIFACTORY_USERNAME=user ARTIFACTORY_PASSWORD=secret BUILD_TYPE=dev "$root/src/scripts/publish-rpm.sh" 2>&1)"
+  tag_rpm_dev_status=$?
+  set -e
+  [ "$tag_rpm_dev_status" -ne 0 ] || fail "unprotected release tag uploaded an RPM with BUILD_TYPE=dev"
+  printf '%s\n' "$tag_rpm_dev" | grep -q 'protected Git ref' || fail "RPM release tag with BUILD_TYPE=dev said: $tag_rpm_dev"
+  if printf '%s\n' "$tag_rpm_dev" | grep -q 'https://'; then
+    fail "RPM release tag with BUILD_TYPE=dev reached Artifactory: $tag_rpm_dev"
+  fi
 )
 
 echo "build-config tests passed"

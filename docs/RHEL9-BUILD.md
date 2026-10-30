@@ -144,7 +144,7 @@ docker run --rm \
 
 ## GitLab
 
-`BUILD_TYPE` defaults to `dev`. A manual pipeline can select `dev` or `release`. Selecting `release` on an ordinary branch does not publish.
+`BUILD_TYPE` defaults to `dev`. A branch pipeline publishes development image tags. The release Git tag publishes the release images and the RPM, including when `BUILD_TYPE` is still `dev`. Selecting `release` on an ordinary branch stops the publish.
 
 Stages, in order: image, validate, compile, test, rpm, package-test, docker, publish. Publish does not run unless the earlier jobs passed. The rpm job still builds the RPM for the runtime image on a dev pipeline. The RPM is uploaded only when the pipeline is a release.
 
@@ -174,13 +174,12 @@ artifactory.tahaa.local/tahaa-image-local/wireshark:4.6.9-ppv1.0.5-rhel9-dev-mha
 
 The username comes from `GITLAB_USER_LOGIN` and is sanitized. The tag with the short commit SHA is the immutable one. The username tag moves. Those tags do not replace the release runtime tag or the `-build` tag.
 
-A release is published only when all of these are true:
+A release is published when both of these are true:
 
-- `BUILD_TYPE=release`
-- the Git ref is protected (`CI_COMMIT_REF_PROTECTED=true`)
-- the pipeline is the Git tag `<WIRESHARK_VERSION>-ppv<PACKET_PENGUIN_VERSION>-rhel<RHEL_VERSION>`
+- the pipeline ref is the Git tag `<WIRESHARK_VERSION>-ppv<PACKET_PENGUIN_VERSION>-rhel<RHEL_VERSION>`
+- that tag is protected (`CI_COMMIT_REF_PROTECTED=true`)
 
-Setting `BUILD_TYPE=release` on an ordinary branch does not publish. If a release image tag or the RPM is already in Artifactory, the push stops. Prefer an immutable tag policy in Artifactory as well.
+`BUILD_TYPE` can stay `dev` on that tag. The pipeline GitLab creates for the tag uses that default, and the publish job still runs. Setting `BUILD_TYPE=release` on an ordinary branch stops the publish. If a release image tag or the RPM is already in Artifactory, the push stops. Prefer an immutable tag policy in Artifactory as well.
 
 The `compile-image` job runs `docker build` on `dockerfile/Dockerfile.wireshark-ubi9-build` and tags it `wireshark-ubi9:dev`. `--add-host satellite9b.hsv.local:10.10.106.59` lets that build reach Satellite. GitLab job containers use `artifactory.tahaa.local/tahaa-image-local/ubi9/ubi9-tahaa-bootstrap-docker:9.8`, so the runner pulls that image from Artifactory instead of pulling the local `wireshark-ubi9:dev` tag. The compile and runtime images still build FROM `ubi9-tahaa-bootstrap:9.8`. Validate runs `./src/scripts/validate-repo.sh` in the job container, on this checkout. The compile image copies only `src/` and `versions/`, so it does not contain `dockerfile/` or `tests/`. Compile, test, rpm, and package-test run inside the tag through `src/scripts/run-compile-image.sh`. The pipeline does not set `pull_policy`: this runner's `allowed_pull_policies` list is empty, and a job-level policy is rejected. Those jobs, and a release publish of the compile image, have to use the same `DOCKER_HOST`. On Kubernetes that is the `wireshark-docker` Service from `k8s/wireshark-docker.yaml`, applied with `-n gitlab`. The client is in the job image. It uses plain HTTP. `DOCKER_TLS_VERIFY` or `DOCKER_CERT_PATH` makes that client use HTTPS against this engine. BuildKit stays on. The engine pod has to reach Satellite while an image builds, and it has to reach Artifactory when a job pushes. The runner must trust the Artifactory certificate. Do not disable TLS verification for the registry. The rpm job compiles again: the compile job keeps `run/` and the logs, and the package step needs a fresh CMake build in that job.
 

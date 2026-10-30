@@ -344,6 +344,52 @@ build_release_tag() {
   build_sanitize_tag "${WIRESHARK_VERSION}-ppv${PACKET_PENGUIN_VERSION}-rhel${RHEL_VERSION}"
 }
 
+# The release Git tag selects a release publish. BUILD_TYPE stays dev on the
+# pipeline GitLab starts for that tag, and a tag pipeline has no branch, so
+# the publish job used to be left out. The tag is the signal.
+build_effective_build_type() {
+  local selected="${BUILD_TYPE:-dev}"
+  case "$selected" in
+    dev|release) ;;
+    *) build_fail "BUILD_TYPE must be dev or release" ;;
+  esac
+  if [ "${CI_COMMIT_TAG:-}" = "$(build_release_tag)" ]; then
+    selected=release
+  fi
+  printf '%s\n' "$selected"
+}
+
+build_require_release_ref() {
+  local release="$1"
+  if [ "${CI_COMMIT_REF_PROTECTED:-}" != "true" ]; then
+    build_fail "release publish requires a protected Git ref. Protect tag ${release} under Settings, Repository, Protected tags, then run the pipeline again."
+  fi
+  if [ "${CI_COMMIT_TAG:-}" != "$release" ]; then
+    build_fail "release publish requires git tag ${release}"
+  fi
+}
+
+# docker manifest inspect does not use one error string. A missing tag must
+# not be treated as "already published".
+build_registry_error_means_absent() {
+  printf '%s\n' "$1" | grep -Eiq 'manifest unknown|not found|404|no such manifest|name unknown|not known to the registry'
+}
+
+# Curl's netrc treats "#" as a comment. A password that contains "#" is
+# truncated, the registry returns 401, and the RPM is not uploaded.
+build_write_curl_config() {
+  local path="$1" auth
+  [ -n "${ARTIFACTORY_USERNAME:-}" ] || build_fail "ARTIFACTORY_USERNAME is unset"
+  [ -n "${ARTIFACTORY_PASSWORD:-}" ] || build_fail "ARTIFACTORY_PASSWORD is unset"
+  case "$ARTIFACTORY_PASSWORD" in
+    *[[:space:]]*) build_fail "ARTIFACTORY_PASSWORD cannot contain whitespace" ;;
+  esac
+  command -v base64 >/dev/null 2>&1 || build_fail "base64 is required to publish"
+  auth="$(printf '%s:%s' "$ARTIFACTORY_USERNAME" "$ARTIFACTORY_PASSWORD" | base64 -w 0)"
+  printf 'header = "Authorization: Basic %s"\n' "$auth" > "$path"
+  chmod 600 "$path"
+}
+
 # Compile image published beside the runtime image. The suffix is fixed;
 # the version prefix comes from build_release_tag.
 build_build_image_tag() {
