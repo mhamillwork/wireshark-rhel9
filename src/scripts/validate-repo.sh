@@ -147,6 +147,16 @@ grep -q 'QT_QPA_PLATFORM=offscreen' .gitlab-ci.yml || build_fail "GitLab docker 
 if grep -q 'AS runtime' dockerfile/Dockerfile.wireshark-ubi9-build; then
   build_fail "compile Dockerfile still contains the runtime stage"
 fi
+[ -f dockerfile/Dockerfile.wireshark-win11-build ] || build_fail "Windows 11 compile Dockerfile is missing"
+[ -f dockerfile/Dockerfile.wireshark-win11-runtime ] || build_fail "Windows 11 runtime Dockerfile is missing"
+grep -q 'mcr.microsoft.com/windows/servercore:ltsc2025' dockerfile/Dockerfile.wireshark-win11-build || build_fail "Windows 11 compile image base is not servercore ltsc2025"
+grep -q 'mcr.microsoft.com/windows:ltsc2025' dockerfile/Dockerfile.wireshark-win11-runtime || build_fail "Windows 11 runtime image base is not the windows ltsc2025 image"
+grep -q 'src/build' dockerfile/Dockerfile.wireshark-win11-build || build_fail "Windows compile Dockerfile does not document the src/build exclusion"
+grep -q 'Documents/Sandbox' docker-compose.windows11.yml || build_fail "Windows Compose does not mount User Documents Sandbox"
+grep -q 'docs/WINDOWS11-BUILD.md' README.md || build_fail "README does not point at the Windows 11 build document"
+if grep -q 'Dockerfile.wireshark-win11' .gitlab-ci.yml; then
+  build_fail "GitLab CI references the Windows 11 image; Windows builds stay on the workstation"
+fi
 
 "$root/tests/test-build-config.sh"
 "$root/tests/test-intree-plugins.sh"
@@ -154,6 +164,7 @@ fi
 "$root/tests/test-install-job-image-packages.sh"
 "$root/tests/test-job-image-dockerfile.sh"
 "$root/tests/test-write-docker-tls.sh"
+"$root/tests/test-windows11.sh"
 if command -v rpmbuild >/dev/null 2>&1; then
   "$root/tests/test-rpm-metadata.sh"
 else

@@ -1,0 +1,33 @@
+# escape=`
+# Windows 11 compile image, tagged wireshark-win11:dev.
+#
+# Build this on Windows 11 with Docker switched to Windows containers.
+# ltsc2025 matches Windows 11 24H2 (build 26100). A different host build
+# needs a matching WINDOWS_IMAGE. Linux containers cannot build this file.
+# GitLab CI does not build it: the cluster has no Windows node.
+#
+#   docker build -f dockerfile/Dockerfile.wireshark-win11-build -t wireshark-win11:dev .
+#
+# The first build downloads Visual Studio Build Tools, Qt, and Chocolatey
+# packages. src/build is excluded by .dockerignore, the same way the RHEL
+# compile image leaves that directory out. docker compose mounts the
+# workstation src tree at C:/src and writes the build back there.
+# versions/ is copied to C:/opt/wireshark-build/versions so a container
+# without the checkout mount can still read versions/WINDOWS11.env.
+
+ARG WINDOWS_IMAGE=mcr.microsoft.com/windows/servercore:ltsc2025
+FROM ${WINDOWS_IMAGE}
+
+ARG QT_VERSION=6.10.3
+ENV QT_VERSION=${QT_VERSION} `
+    WIRESHARK_BASE_DIR=C:\\wireshark-libs `
+    WIRESHARK_QT6_PREFIX_PATH=C:\\Qt\\${QT_VERSION}\\msvc2022_64
+
+COPY src/scripts/install-windows-build-tools.ps1 C:/install-windows-build-tools.ps1
+RUN powershell -NoProfile -ExecutionPolicy Bypass -File C:\install-windows-build-tools.ps1
+
+COPY versions/ C:/opt/wireshark-build/versions/
+COPY src/ C:/src/
+
+WORKDIR C:/src
+CMD ["powershell"]

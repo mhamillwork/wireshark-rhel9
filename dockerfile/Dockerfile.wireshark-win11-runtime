@@ -1,0 +1,39 @@
+# escape=`
+# Windows 11 runtime image, tagged wireshark-win11:runtime.
+#
+# Build it after src/scripts/build-windows-installer.ps1 -Installer has
+# written the NSIS executable. The base is the Windows image, not
+# servercore, because Wireshark.exe is a GUI program. The host OS build
+# still has to match this image. GitLab CI does not build it.
+#
+#   docker build -f dockerfile/Dockerfile.wireshark-win11-runtime `
+#     -t wireshark-win11:runtime .
+#
+# The silent install lands in C:\Wireshark. It does not load the Npcap
+# kernel driver. Run the same executable on the Windows 11 desktop when
+# the program has to capture packets. The container opens files from the
+# Documents Sandbox mount at C:\sandbox.
+
+ARG WINDOWS_IMAGE=mcr.microsoft.com/windows:ltsc2025
+FROM ${WINDOWS_IMAGE}
+
+ARG WIRESHARK_VERSION
+ARG PACKET_PENGUIN_VERSION
+ARG WINDOWS_VERSION=11
+ARG QT_VERSION
+ARG INSTALLER_DIR=src/artifacts/installers/windows11
+
+LABEL org.opencontainers.image.title="wireshark" `
+      org.opencontainers.image.version="${WIRESHARK_VERSION}" `
+      wireshark.version="${WIRESHARK_VERSION}" `
+      packet.penguin.version="${PACKET_PENGUIN_VERSION}" `
+      windows.version="${WINDOWS_VERSION}" `
+      qt.version="${QT_VERSION}"
+
+COPY src/scripts/install-windows-runtime.ps1 C:/install-windows-runtime.ps1
+COPY ${INSTALLER_DIR}/ C:/installer/
+RUN powershell -NoProfile -ExecutionPolicy Bypass -File C:\install-windows-runtime.ps1
+
+ENV PATH="C:\\Wireshark;${PATH}"
+WORKDIR C:/sandbox
+CMD ["C:\\Wireshark\\Wireshark.exe"]
