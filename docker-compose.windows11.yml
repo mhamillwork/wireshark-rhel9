@@ -1,0 +1,37 @@
+# Windows 11 compile session. Compose does not pull the image.
+# Build dockerfile/Dockerfile.wireshark-win11-build on this host first,
+# with Docker switched to Windows containers.
+#
+# The checkout lives in the user Documents Sandbox, the same role as
+# ${HOME}/sandbox on the RHEL workstation:
+#   %USERPROFILE%\Documents\Sandbox\wireshark-packet-penguin
+# That tree is mounted at C:\src, so the build writes
+# C:\src\build\windows11 back into Documents\Sandbox\...\src.
+# The parent checkout is read-only at C:\workspace. C:\sandbox is the
+# Documents\Sandbox directory, for capture files and plugin trees.
+#
+# ping -t keeps the compile container up. servercore has no sleep.
+# The runtime service is behind the "runtime" profile so `up` stays on
+# the compile image.
+services:
+  wireshark-compile:
+    image: ${WIRESHARK_WINDOWS_IMAGE:-wireshark-win11:dev}
+    pull_policy: ${WIRESHARK_PULL_POLICY:-if_not_present}
+    stdin_open: true
+    tty: true
+    working_dir: C:/src
+    command: ["ping", "-t", "localhost"]
+    volumes:
+      - ${USERPROFILE}/Documents/Sandbox/wireshark-packet-penguin:C:/workspace:ro
+      - ${USERPROFILE}/Documents/Sandbox/wireshark-packet-penguin/src:C:/src
+      - ${SANDBOX_DIR:-${USERPROFILE}/Documents/Sandbox}:C:/sandbox
+
+  wireshark:
+    profiles: ["runtime"]
+    image: ${WIRESHARK_WINDOWS_RUNTIME:-wireshark-win11:runtime}
+    pull_policy: ${WIRESHARK_PULL_POLICY:-if_not_present}
+    stdin_open: true
+    tty: true
+    working_dir: C:/sandbox
+    volumes:
+      - ${SANDBOX_DIR:-${USERPROFILE}/Documents/Sandbox}:C:/sandbox

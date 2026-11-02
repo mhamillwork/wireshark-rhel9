@@ -144,3 +144,7 @@ If the window is refused, allow the container's root user on the local display:
 ```bash
 xhost +SI:localuser:root
 ```
+
+## Windows 11
+
+Windows 11 is built on a Windows host. GitLab CI does not build it. The compile image, the runtime image, Compose, and the NSIS installer are in `docs/WINDOWS11-BUILD.md`. The checkout mounts from `%USERPROFILE%\Documents\Sandbox`, in the same role as `${HOME}/sandbox` on the RHEL workstation.
